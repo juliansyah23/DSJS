@@ -1,0 +1,32 @@
+
+  GET|HEAD        api/admin/applications .............................................................................. Api\Admin\ApplicationController@index
+  PATCH           api/admin/applications/{application} ............................................................... Api\Admin\ApplicationController@update
+  GET|HEAD        api/admin/audit-logs ................................................................................... Api\Admin\AuditLogController@index
+  GET|HEAD        api/admin/dashboard/stats ............................................................................. Api\Admin\DashboardController@stats
+  GET|HEAD        api/admin/notifications ....................................................................... Api\Admin\DashboardController@notifications
+  GET|HEAD        api/admin/users ............................................................................................ Api\Admin\UserController@index
+  POST            api/admin/users ............................................................................................ Api\Admin\UserController@store
+  PATCH           api/admin/users/{user} .................................................................................... Api\Admin\UserController@update
+  GET|HEAD        api/applications .......................................................................................... Api\ApplicationController@index
+  POST            api/applications .......................................................................................... Api\ApplicationController@store
+  GET|HEAD        api/applications/{application} ............................................................................. Api\ApplicationController@show
+  GET|HEAD        api/applications/{application}/files/{file} ............................................................ Api\ApplicationController@download
+  POST            api/auth/forgot-password ........................................................................... Api\Auth\AuthController@forgotPassword
+  POST            api/auth/login .............................................................................................. Api\Auth\AuthController@login
+  POST            api/auth/logout ............................................................................................ Api\Auth\AuthController@logout
+  GET|HEAD        api/auth/me .................................................................................................... Api\Auth\AuthController@me
+  POST            api/auth/register ........................................................................................ Api\Auth\AuthController@register
+  POST            api/auth/resend-otp ..................................................................................... Api\Auth\AuthController@resendOtp
+  POST            api/auth/reset-password ............................................................................. Api\Auth\AuthController@resetPassword
+  POST            api/auth/verify-otp ..................................................................................... Api\Auth\AuthController@verifyOtp
+  GET|HEAD        api/drafts ....................................................................................... drafts.index › Api\DraftController@index
+  POST            api/drafts ....................................................................................... drafts.store › Api\DraftController@store
+  GET|HEAD        api/drafts/{draft} ................................................................................. drafts.show › Api\DraftController@show
+  PUT|PATCH       api/drafts/{draft} ............................................................................. drafts.update › Api\DraftController@update
+  DELETE          api/drafts/{draft} ........................................................................... drafts.destroy › Api\DraftController@destroy
+  GET|HEAD        api/profile .................................................................................................... Api\ProfileController@show
+  PUT             api/profile .................................................................................................. Api\ProfileController@update
+  GET|HEAD        api/track/{code} ................................................................................................. Api\TrackController@show
+
+                                                                                                                                          Showing [28] routes
+

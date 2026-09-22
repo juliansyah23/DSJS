@@ -1,0 +1,56 @@
+
+   PASS  Tests\Feature\AdminAuthorizationTest
+  ✓ regular user is blocked from every admin endpoint                                                                                                   0.70s  
+  ✓ guest is rejected with 401 from admin endpoints                                                                                                     0.03s  
+  ✓ admin can reach dashboard endpoints                                                                                                                 0.54s  
+  ✓ admin created user can be marked verified                                                                                                           0.53s  
+  ✓ admin created user can be left unverified                                                                                                           0.51s  
+  ✓ admin created user password is hashed and never returned                                                                                            0.84s  
+  ✓ weak password and duplicate email are rejected                                                                                                      0.52s  
+  ✓ admin cannot demote or deactivate own account                                                                                                       0.27s  
+  ✓ deactivating a user revokes their tokens                                                                                                            0.51s  
+  ✓ admin update changes status and records audit log                                                                                                   0.53s  
+  ✓ officer must be an active admin                                                                                                                     0.78s  
+  ✓ invalid status is rejected                                                                                                                          0.52s  
+  ✓ user management actions are audit logged                                                                                                            0.78s  
+  ✓ audit log listing is paginated and newest first                                                                                                     0.59s  
+
+   PASS  Tests\Feature\ApplicationAccessTest
+  ✓ application index only returns own applications                                                                                                     0.59s  
+  ✓ owner can view application but other user cannot                                                                                                    0.53s  
+  ✓ admin can view any application                                                                                                                      0.51s  
+  ✓ guest cannot view application                                                                                                                       0.26s  
+  ✓ file download is restricted to owner and admin                                                                                                      0.79s  
+  ✓ guest cannot download file                                                                                                                          0.27s  
+  ✓ file cannot be downloaded through a mismatched application                                                                                          0.29s  
+  ✓ draft index only returns own drafts                                                                                                                 0.55s  
+  ✓ other user cannot read update or delete a draft                                                                                                     0.53s  
+  ✓ owner can update and delete own draft                                                                                                               0.27s  
+
+   PASS  Tests\Feature\ApplicationSubmissionTest
+  ✓ submit stores nine pdf files on the private disk                                                                                                    0.34s  
+  ✓ submit creates five stages and a trackable code                                                                                                     0.32s  
+  ✓ guest cannot submit application                                                                                                                     0.05s  
+  ✓ submit rejects wrong number of files                                                                                                                0.30s  
+  ✓ submit rejects non pdf upload                                                                                                                       0.32s  
+  ✓ submit rejects oversized file                                                                                                                       0.32s  
+  ✓ submit requires company fields when not skipped                                                                                                     0.31s  
+  ✓ submit rejects invalid ktp                                                                                                                          0.31s  
+  ✓ submit removes own draft but never another users draft                                                                                              0.61s  
+
+   PASS  Tests\Feature\AuthSecurityTest
+  ✓ reset password otp cannot be exchanged for login token                                                                                              0.52s  
+  ✓ registration otp verifies email and issues limited token                                                                                            0.76s  
+  ✓ inactive account cannot login                                                                                                                       0.50s  
+  ✓ resend response does not enumerate accounts or cooldown                                                                                             0.51s  
+
+   PASS  Tests\Feature\PublicTrackTest
+  ✓ public track never exposes personal data                                                                                                            0.28s  
+  ✓ track rejects malformed code without touching database                                                                                              0.27s  
+  ✓ track returns not found for unknown but well formed code                                                                                            0.28s  
+  ✓ track is case insensitive for existing code                                                                                                         0.27s  
+
+  Tests:    41 passed (264 assertions)
+  Duration: 18.70s
+
+==SELESAI== 

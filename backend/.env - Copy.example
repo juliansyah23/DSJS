@@ -1,0 +1,64 @@
+APP_NAME="Digital Service Journey"
+APP_ENV=local
+APP_KEY=
+APP_DEBUG=true
+APP_TIMEZONE=Asia/Jakarta
+APP_URL=http://localhost:8000
+
+APP_LOCALE=id
+APP_FALLBACK_LOCALE=en
+APP_FAKER_LOCALE=id_ID
+
+LOG_CHANNEL=daily
+LOG_STACK=single
+LOG_DEPRECATIONS_CHANNEL=null
+LOG_LEVEL=debug
+
+# ── Database (MySQL) ─────────────────────────────────────
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=dsj_db
+DB_USERNAME=root
+DB_PASSWORD=
+
+SESSION_DRIVER=file
+SESSION_LIFETIME=120
+SESSION_ENCRYPT=false
+
+BROADCAST_CONNECTION=log
+FILESYSTEM_DISK=local
+QUEUE_CONNECTION=sync
+
+CACHE_STORE=file
+
+MEMCACHED_HOST=127.0.0.1
+
+REDIS_CLIENT=phpredis
+REDIS_HOST=127.0.0.1
+REDIS_PASSWORD=null
+REDIS_PORT=6379
+
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.mailtrap.io
+MAIL_PORT=2525
+MAIL_USERNAME=null
+MAIL_PASSWORD=null
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS="layanan@dsj.go.id"
+MAIL_FROM_NAME="${APP_NAME}"
+
+# ── Sanctum / CORS ────────────────────────────────────────
+# Domain frontend (Vite dev server / production domain), pisahkan dengan koma
+SANCTUM_STATEFUL_DOMAINS=localhost:5173,127.0.0.1:5173
+FRONTEND_URL=http://localhost:5173
+SESSION_DOMAIN=localhost
+
+# ── OTP ───────────────────────────────────────────────────
+OTP_LENGTH=6
+OTP_EXPIRY_MINUTES=5
+OTP_MAX_ATTEMPTS=5
+OTP_RESEND_COOLDOWN_SECONDS=60
+
+# ── Upload berkas ────────────────────────────────────────
+UPLOAD_MAX_SIZE_KB=5120

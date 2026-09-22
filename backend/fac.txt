@@ -1,0 +1,9 @@
+c:\Users\Administrator\Documents\BRIN\Project Apps\DSJS\backend\database\seeders\DatabaseSeeder.php
+0001_01_01_000000_create_users_table.php
+0001_01_01_000001_create_otps_table.php
+0001_01_01_000002_create_personal_access_tokens_table.php
+2026_08_14_000100_create_user_profiles_table.php
+2026_08_14_000200_create_applications_table.php
+2026_08_14_000300_create_drafts_table.php
+2026_08_14_000400_create_audit_logs_table.php
+migrations-list.txt
