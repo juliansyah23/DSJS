@@ -14,9 +14,9 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         User::updateOrCreate(
-            ['email' => 'admin@dsj.go.id'],
+            ['email' => 'admin@dsjs-brin.com'],
             [
-                'name' => 'Admin DSJ',
+                'name' => 'Admin DSJS',
                 'phone' => '081234567890',
                 'password' => 'admin123', // wajib diganti setelah seed pertama di lingkungan nyata
                 'role' => 'admin',
@@ -25,9 +25,9 @@ class DatabaseSeeder extends Seeder
         );
 
         User::updateOrCreate(
-            ['email' => 'user@dsj.go.id'],
+            ['email' => 'user@dsjs-brin.com'],
             [
-                'name' => 'Rival Adrian',
+                'name' => 'User Demo',
                 'phone' => '081298765432',
                 'password' => 'user123',
                 'role' => 'user',
