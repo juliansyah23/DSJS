@@ -1,21 +1,26 @@
 <?php
 
 return [
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    
+    'paths' => [
+        'api/*',
+        'auth/*',
+        'sanctum/csrf-cookie',
+    ],
 
     'allowed_methods' => ['*'],
 
-    // Hanya izinkan origin frontend yang eksplisit didaftarkan di .env — jangan pakai '*' di production.
-    'allowed_origins' => array_filter(explode(',', env('CORS_ALLOWED_ORIGINS', env('FRONTEND_URL', 'http://localhost:5173')))),
+    'allowed_origins' => [
+        'https://www.dsjs-brin.com',
+    ],
 
     'allowed_origins_patterns' => [],
 
-    'allowed_headers' => ['Accept', 'Authorization', 'Content-Type', 'Origin', 'X-Requested-With'],
+    'allowed_headers' => ['*'],
 
     'exposed_headers' => [],
 
-    'max_age' => 3600,
+    'max_age' => 0,
 
-    // API memakai bearer token dan tidak mengirim cookie lintas origin.
-    'supports_credentials' => false,
+    'supports_credentials' => true,
 ];
