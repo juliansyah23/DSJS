@@ -11,6 +11,7 @@ return [
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
+        'https://dsjs-brin.com',
         'https://www.dsjs-brin.com',
     ],
 
