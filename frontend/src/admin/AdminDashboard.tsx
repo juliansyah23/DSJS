@@ -360,6 +360,34 @@ function RecentApplications() {
 }
 
 // ── Reusable app table ────────────────────────────────────────────────────────
+function ApplicationCells({ app, recent = false }: { app: AppRow; recent?: boolean }) {
+  return (
+    <>
+      <td className="px-6 py-3.5">
+        <span className="text-xs font-500 text-accent tabular-nums" style={{ fontFamily: FONT_MONO, fontWeight: 500 }}>{app.code}</span>
+      </td>
+      <td className="px-6 py-3.5">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-[9px] font-800 flex-shrink-0" style={{ fontWeight: 800 }}>
+            {getInitials(app.name)}
+          </div>
+          <span className="text-sm font-500 text-foreground whitespace-nowrap" style={recent ? { fontWeight: 500 } : undefined}>{app.name}</span>
+        </div>
+      </td>
+      <td className={`px-6 py-3.5${recent ? "" : " max-w-[180px]"}`}>
+        <span className={`text-xs text-muted-foreground block truncate${recent ? " whitespace-nowrap max-w-[180px]" : ""}`}>{app.service}</span>
+      </td>
+      <td className="px-6 py-3.5 whitespace-nowrap"><Badge status={app.status} /></td>
+      <td className="px-6 py-3.5">
+        <span className="text-xs text-muted-foreground whitespace-nowrap tabular-nums">{app.date}</span>
+      </td>
+      <td className="px-6 py-3.5">
+        <span className="text-xs text-muted-foreground whitespace-nowrap">{app.officer}</span>
+      </td>
+    </>
+  );
+}
+
 function AppTable({ apps, onSelect }: { apps: AppRow[]; onSelect?: (app: AppRow) => void }) {
   return (
     <div className="overflow-x-auto">
@@ -376,27 +404,7 @@ function AppTable({ apps, onSelect }: { apps: AppRow[]; onSelect?: (app: AppRow)
         <tbody className="divide-y divide-border">
           {apps.map(app => (
             <tr key={app.id} className="hover:bg-secondary/20 transition-colors group">
-              <td className="px-6 py-3.5">
-                <span className="text-xs font-500 text-accent tabular-nums" style={{ fontFamily: FONT_MONO, fontWeight: 500 }}>{app.code}</span>
-              </td>
-              <td className="px-6 py-3.5">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-[9px] font-800 flex-shrink-0" style={{ fontWeight: 800 }}>
-                    {getInitials(app.name)}
-                  </div>
-                  <span className="text-sm font-500 text-foreground whitespace-nowrap" style={{ fontWeight: 500 }}>{app.name}</span>
-                </div>
-              </td>
-              <td className="px-6 py-3.5">
-                <span className="text-xs text-muted-foreground whitespace-nowrap max-w-[180px] block truncate">{app.service}</span>
-              </td>
-              <td className="px-6 py-3.5 whitespace-nowrap"><Badge status={app.status} /></td>
-              <td className="px-6 py-3.5">
-                <span className="text-xs text-muted-foreground whitespace-nowrap tabular-nums">{app.date}</span>
-              </td>
-              <td className="px-6 py-3.5">
-                <span className="text-xs text-muted-foreground whitespace-nowrap">{app.officer}</span>
-              </td>
+              <ApplicationCells app={app} recent />
               <td className="px-6 py-3.5 w-16">
                 <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
@@ -592,27 +600,7 @@ function PagePermohonan({ colorBlind }: { colorBlind?: boolean }) {
                 ? <tr><td colSpan={7} className="px-6 py-14 text-center text-sm text-muted-foreground">Tidak ada data yang cocok dengan filter.</td></tr>
                 : rows.map(app => (
                   <tr key={app.id} className="hover:bg-secondary/20 transition-colors group">
-                    <td className="px-6 py-3.5">
-                      <span className="text-xs font-500 text-accent tabular-nums" style={{ fontFamily: FONT_MONO, fontWeight: 500 }}>{app.code}</span>
-                    </td>
-                    <td className="px-6 py-3.5">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-[9px] font-800 flex-shrink-0" style={{ fontWeight: 800 }}>
-                          {getInitials(app.name)}
-                        </div>
-                        <span className="text-sm font-500 text-foreground whitespace-nowrap">{app.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-3.5 max-w-[180px]">
-                      <span className="text-xs text-muted-foreground block truncate">{app.service}</span>
-                    </td>
-                    <td className="px-6 py-3.5 whitespace-nowrap"><Badge status={app.status} /></td>
-                    <td className="px-6 py-3.5">
-                      <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">{app.date}</span>
-                    </td>
-                    <td className="px-6 py-3.5">
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">{app.officer}</span>
-                    </td>
+                    <ApplicationCells app={app} />
                     <td className="px-6 py-3.5">
                       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => setSelectedId(app.id)} className="p-1.5 rounded-lg hover:bg-accent/10 transition-colors" title="Detail dan proses" aria-label={`Detail ${app.code}`}><Eye className="h-3.5 w-3.5 text-accent" /></button>

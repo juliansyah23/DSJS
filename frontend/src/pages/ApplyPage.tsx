@@ -400,34 +400,39 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
 
   // Auto-save debounced 700ms
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistDraft = useCallback(async (item: DraftItem) => {
+    const saved = await api.updateDraft(item.id, {
+      service_type: item.serviceType,
+      current_step: item.step,
+      skip_company: item.skipCompany,
+      form_data: item.formData,
+    });
+    setDrafts(current => current.map(d => d.id === saved.id ? fromApiDraft(saved) : d));
+  }, []);
+
   const scheduleSave = useCallback((item: DraftItem) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       try {
-        const saved = await api.updateDraft(item.id, {
-          service_type: item.serviceType,
-          current_step: item.step,
-          skip_company: item.skipCompany,
-          form_data: item.formData,
-        });
-        setDrafts(current => current.map(d => d.id === saved.id ? fromApiDraft(saved) : d));
+        await persistDraft(item);
       } catch { /* auto-save akan dicoba kembali pada perubahan berikutnya */ }
     }, 700);
-  }, []);
+  }, [persistDraft]);
+
+  const currentDraft = (formData = f): DraftItem | null => draftId.current === null ? null : ({
+    id: draftId.current,
+    serviceType,
+    step,
+    skipCompany,
+    formData,
+    savedAt: new Date().toISOString(),
+  });
 
   const set = (key: string, val: string) => {
     setF(prev => {
       const next = { ...prev, [key]: val };
-      if (draftId.current) {
-        scheduleSave({
-          id: draftId.current,
-          serviceType,
-          step,
-          skipCompany,
-          formData: next,
-          savedAt: new Date().toISOString(),
-        });
-      }
+      const draft = currentDraft(next);
+      if (draft) scheduleSave(draft);
       return next;
     });
     if (val.trim()) setErr(prev => { const n = { ...prev }; delete n[key]; return n; });
@@ -435,15 +440,8 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
 
   // Save when step / serviceType / skipCompany changes
   useEffect(() => {
-    if (!draftId.current) return;
-    scheduleSave({
-      id: draftId.current,
-      serviceType,
-      step,
-      skipCompany,
-      formData: f,
-      savedAt: new Date().toISOString(),
-    });
+    const draft = currentDraft();
+    if (draft) scheduleSave(draft);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, serviceType, skipCompany]);
 
@@ -477,18 +475,10 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
 
   // Manual save
   const manualSave = async () => {
-    if (!draftId.current) return;
-    const item: DraftItem = {
-      id: draftId.current,
-      serviceType,
-      step,
-      skipCompany,
-      formData: f,
-      savedAt: new Date().toISOString(),
-    };
+    const item = currentDraft();
+    if (!item) return;
     try {
-      const saved = await api.updateDraft(item.id, { service_type: item.serviceType, current_step: item.step, skip_company: item.skipCompany, form_data: item.formData });
-      setDrafts(current => current.map(d => d.id === saved.id ? fromApiDraft(saved) : d));
+      await persistDraft(item);
       showToast("saved");
     } catch (e) {
       setSubmitError(e instanceof ApiError ? e.firstValidationMessage() : "Draft gagal disimpan.");
