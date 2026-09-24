@@ -937,7 +937,12 @@ export function AdminDashboard({ setView, auth, onLogout, colorBlind }: {
       <div className="h-screen overflow-hidden bg-background flex" style={{ fontFamily: FONT_BODY }}>
         {/* Mobile overlay */}
         {sidebarOpen && (
-          <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+          <button
+            type="button"
+            aria-label="Tutup menu navigasi"
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
+            onClick={() => setSidebarOpen(false)}
+          />
         )}
 
         {/* ── Sidebar ── */}

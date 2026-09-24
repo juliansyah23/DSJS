@@ -36,7 +36,7 @@ export function AccountSettings() {
   }
   return <div className="max-w-2xl space-y-5">
     <h2 className="text-xl font-bold">Pengaturan akun administrator</h2>
-    {error && <div role="alert" className="text-destructive">{error} {!email && <button onClick={() => setAttempt(v => v + 1)}>Coba lagi</button>}</div>}
+    {error && <div role="alert" className="text-destructive">{error} {!email && <button type="button" onClick={() => setAttempt(v => v + 1)}>Coba lagi</button>}</div>}
     {success && <p role="status">{success}</p>}
     {loading ? <p>Memuat profil…</p> : <>
       <form className="space-y-3 rounded-xl border border-border bg-background p-5 text-sm" onSubmit={e => { e.preventDefault(); void save(false); }}>
@@ -45,7 +45,7 @@ export function AccountSettings() {
           <label className="block">Nama<input className={field} required minLength={3} maxLength={100} value={name} onChange={e => setName(e.target.value)} /></label>
           <label className="block">Email (hanya baca)<input className={field} readOnly value={email} /></label>
           <label className="block">Telepon<input className={field} maxLength={20} value={phone} onChange={e => setPhone(e.target.value)} /></label>
-          <button className="rounded-lg bg-primary px-4 py-2 text-primary-foreground">{busy ? "Menyimpan…" : "Simpan profil"}</button>
+          <button type="submit" className="rounded-lg bg-primary px-4 py-2 text-primary-foreground">{busy ? "Menyimpan…" : "Simpan profil"}</button>
         </fieldset>
       </form>
       <form className="space-y-3 rounded-xl border border-border bg-background p-5 text-sm" onSubmit={e => {
@@ -59,7 +59,7 @@ export function AccountSettings() {
           <label className="block">Password saat ini<input className={field} required type="password" autoComplete="current-password" value={current} onChange={e => setCurrent(e.target.value)} /></label>
           <label className="block">Password baru<input className={field} required minLength={8} type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} /></label>
           <label className="block">Konfirmasi password baru<input className={field} required type="password" autoComplete="new-password" value={confirmation} onChange={e => setConfirmation(e.target.value)} /></label>
-          <button className="rounded-lg bg-primary px-4 py-2 text-primary-foreground">Ubah password</button>
+          <button type="submit" className="rounded-lg bg-primary px-4 py-2 text-primary-foreground">Ubah password</button>
         </fieldset>
       </form>
     </>}
