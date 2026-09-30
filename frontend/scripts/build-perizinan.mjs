@@ -6,12 +6,55 @@
  *   npm run perizinan:build
  *   node scripts/build-perizinan.mjs [path/ke/detail.json]
  */
-import { readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const input = resolve(process.argv[2] ?? resolve(here, "../../detail.json"));
+const repositoryRoot = resolve(here, "../..");
+const requestedInput = process.argv[2];
+
+if (process.argv.length > 3) {
+  console.error("Pemakaian: node scripts/build-perizinan.mjs [path/ke/detail.json]");
+  process.exit(1);
+}
+
+const input = resolve(repositoryRoot, requestedInput ?? "detail.json");
+const inputRelativeToRoot = relative(repositoryRoot, input);
+const isOutsideRepository = (pathRelativeToRoot) =>
+  isAbsolute(pathRelativeToRoot) ||
+  pathRelativeToRoot === ".." ||
+  pathRelativeToRoot.startsWith("..\\") ||
+  pathRelativeToRoot.startsWith("../");
+
+// The input is a CLI argument, so do not allow it to escape the repository.
+// Resolve the existing file as well to prevent a symlink from bypassing this check.
+if (
+  !inputRelativeToRoot ||
+  isOutsideRepository(inputRelativeToRoot)
+) {
+  console.error(`Input harus berada di dalam repository: ${input}`);
+  process.exit(1);
+}
+
+let safeInput;
+try {
+  safeInput = realpathSync(input);
+} catch {
+  console.error(`File input tidak ditemukan: ${input}`);
+  process.exit(1);
+}
+
+const resolvedInputRelativeToRoot = relative(repositoryRoot, safeInput);
+if (
+  !resolvedInputRelativeToRoot ||
+  isOutsideRepository(resolvedInputRelativeToRoot) ||
+  !safeInput.toLowerCase().endsWith(".json")
+) {
+  console.error(`Input harus berupa file JSON di dalam repository: ${input}`);
+  process.exit(1);
+}
+
 const output = resolve(here, "../src/app/perizinan.json");
 
 const ENTITIES = { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", ndash: "–", mdash: "—", rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“", hellip: "…", bull: "•" };
@@ -101,7 +144,7 @@ const summary = (lines) => {
   };
 };
 
-const raw = JSON.parse(readFileSync(input, "utf8"));
+const raw = JSON.parse(readFileSync(safeInput, "utf8"));
 const tab = (entry, id) => entry.tabs?.find((t) => t.id === id)?.content ?? "";
 const ALLOWED_PERMIT_VALUES = new Set(["128", "263", "264", "267", "269", "279", "449"]);
 
