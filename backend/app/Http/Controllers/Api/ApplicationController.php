@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
@@ -39,10 +40,17 @@ class ApplicationController extends Controller
 
     public function store(StoreApplicationRequest $request): JsonResponse
     {
+        $files = $request->file('files', []) ?? [];
+        $labels = $request->validated('file_labels') ?? [];
+        if (array_keys($files) !== array_keys($labels)) {
+            throw ValidationException::withMessages([
+                'file_labels' => ['Setiap berkas harus memiliki tepat satu label dengan indeks yang sama.'],
+            ]);
+        }
         $storedFiles = [];
 
         try {
-            $application = DB::transaction(function () use ($request, &$storedFiles) {
+            $application = DB::transaction(function () use ($request, $files, $labels, &$storedFiles) {
                 $form = $request->validated('form_data');
                 $application = $request->user()->applications()->create([
                     'application_code' => $this->uniqueCode(),
@@ -64,17 +72,18 @@ class ApplicationController extends Controller
                     ]);
                 }
 
-                foreach ($request->file('files', []) as $index => $uploadedFile) {
+                foreach ($files as $index => $uploadedFile) {
+                    $extension = $uploadedFile->getClientOriginalExtension() ?: 'pdf';
                     $path = $uploadedFile->storeAs(
                         (string) $application->id,
-                        Str::uuid().'.pdf',
+                        Str::uuid().'.'.$extension,
                         'application_files',
                     );
                     $storedFiles[] = $path;
 
                     $application->files()->create([
                         'uploaded_by' => $request->user()->id,
-                        'label' => $request->validated('file_labels')[$index],
+                        'label' => $labels[$index],
                         'original_name' => mb_substr($uploadedFile->getClientOriginalName(), 0, 255),
                         'disk' => 'application_files',
                         'path' => $path,

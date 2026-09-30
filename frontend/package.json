@@ -4,6 +4,7 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
+    "perizinan:build": "node scripts/build-perizinan.mjs",
     "build": "vite build",
     "dev": "vite",
     "typecheck": "tsc --noEmit"

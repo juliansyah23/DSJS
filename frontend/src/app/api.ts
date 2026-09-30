@@ -293,8 +293,10 @@ export const api = {
     body.append("skip_company", input.skipCompany ? "1" : "0");
     if (input.draftId) body.append("draft_id", String(input.draftId));
     body.append("form_data", json(input.formData));
-    body.append("file_labels", json(input.labels));
-    input.files.forEach(file => body.append("files[]", file));
+    if (input.serviceType !== "oss") {
+      body.append("file_labels", json(input.labels));
+      input.files.forEach(file => body.append("files[]", file));
+    }
     return (await request<ApiEnvelope<{ application: ApiApplication }>>("/applications", { method: "POST", body })).data.application;
   },
   async track(code: string) {
@@ -304,7 +306,7 @@ export const api = {
     return (await request<ApiEnvelope<DashboardStats>>(`/admin/dashboard/stats${toQuery({ period })}`, { signal })).data;
   },
   async adminNotifications(signal?: AbortSignal) {
-    return (await request<ApiEnvelope<{ notifications: AdminNotification[] }>>("/admin/dashboard/notifications", { signal })).data.notifications;
+    return (await request<ApiEnvelope<{ notifications: AdminNotification[] }>>("/admin/notifications", { signal })).data.notifications;
   },
   async adminApplications(query: AdminApplicationQuery = {}, signal?: AbortSignal) {
     return (await request<ApiEnvelope<{ applications: ApiApplication[]; pagination: Pagination }>>(

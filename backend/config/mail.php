@@ -5,7 +5,8 @@ return [
     'mailers' => [
         'smtp' => [
             'transport' => 'smtp',
-            'scheme' => env('MAIL_SCHEME'),
+            // Support both Laravel's MAIL_SCHEME and the older MAIL_ENCRYPTION name.
+            'scheme' => env('MAIL_SCHEME', env('MAIL_ENCRYPTION')),
             'url' => env('MAIL_URL'),
             'host' => env('MAIL_HOST', '127.0.0.1'),
             'port' => env('MAIL_PORT', 2525),

@@ -7,13 +7,35 @@ import {
 } from "lucide-react";
 import { View, AuthUser, ServiceType, UserProfile } from "../app/types";
 import { SERVICE_META, provinces, cities, districts, villages } from "../app/data";
+import { PermitType, needsPermitType, PERMIT_FIELDS } from "../app/perizinan";
+import { PermitTypePicker, PermitInfo, usePermitTypes } from "../app/components/PermitTypePicker";
 import { Inp, Sel, Tex } from "../app/components/shared";
 import { api, ApiDraft, ApiError } from "../app/api";
+import { SIP_FORM_CONFIG, PermitField, PermitFieldUnit } from "../app/sipFormConfig";
+
+
+
+function validateFormat(value: string, format: "npwp" | "postal" | "tel" | "email"): string | null {
+  if (!value.trim()) return null;
+  const patterns: Record<typeof format, RegExp> = {
+    npwp: /^(\d{15}|\d{16})$/,
+    postal: /^\d{5}$/,
+    tel: /^(?:\+62|62|0)\d{8,13}$/,
+    email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+  };
+  const messages: Record<typeof format, string> = {
+    npwp: "NPWP harus 15 atau 16 digit angka",
+    postal: "Kode pos harus 5 digit angka",
+    tel: "Nomor telepon tidak valid",
+    email: "Format email tidak valid",
+  };
+  return patterns[format].test(value) ? null : messages[format];
+}
 
 // ─── Step indicator ─────────────────────────────────────────────────────────
 
-function StepIndicator({ current }: { current: number }) {
-  const steps = ["Data Pemohon", "Lokasi Izin", "Data Perusahaan", "Data Permohonan", "Upload Berkas"];
+function StepIndicator({ current, labels }: { current: number; labels?: string[] }) {
+  const steps = labels ?? ["Data Pemohon", "Lokasi Izin", "Data Perusahaan", "Data Permohonan", "Upload Berkas"];
   return (
     <div className="flex items-center" style={{ fontFamily: "'Inter', sans-serif" }}>
       {steps.map((label, i) => (
@@ -99,8 +121,9 @@ function MapView() {
 
 // ─── File upload ─────────────────────────────────────────────────────────────
 
-function FileItem({ label, note, downloadable = false, showError = false, onFileChange }: {
-  label: string; note?: string; downloadable?: boolean; showError?: boolean; onFileChange?: (f: File | null) => void;
+function FileItem({ label, note, downloadable = false, required = true, showError = false, onFileChange, accept, acceptError, status, link, items }: {
+  label: string; note?: string; downloadable?: boolean; required?: boolean; showError?: boolean; onFileChange?: (f: File | null) => void;
+  accept?: string; acceptError?: string; status?: string; link?: string; items?: string[];
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [typeError, setTypeError] = useState(false);
@@ -108,7 +131,7 @@ function FileItem({ label, note, downloadable = false, showError = false, onFile
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = e.target.files?.[0] ?? null;
-    if (picked && picked.type !== "application/pdf") {
+    if (picked && accept && !picked.type.includes(accept.replace(/,/g, "|"))) {
       setTypeError(true); setFile(null); onFileChange?.(null); e.target.value = ""; return;
     }
     setTypeError(false); setFile(picked); onFileChange?.(picked);
@@ -126,10 +149,22 @@ function FileItem({ label, note, downloadable = false, showError = false, onFile
           {file ? <Check className="h-4 w-4 text-emerald-600" /> : hasError ? <AlertTriangle className="h-4 w-4 text-red-500" /> : <Upload className="h-4 w-4 text-muted-foreground" />}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-foreground leading-snug">{label} <span className="text-red-500 text-xs">*</span></div>
+          <div className="text-sm font-medium text-foreground leading-snug flex items-center flex-wrap gap-x-1.5 gap-y-1">
+            {label} {required && <span className="text-red-500 text-xs">*</span>}
+            {status && (
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                status === "Tentatif" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-200"
+              }`}>{status}</span>
+            )}
+          </div>
+          {items && items.length > 0 && (
+            <ul className="mt-1 space-y-0.5 list-disc pl-4 text-xs text-muted-foreground leading-relaxed">
+              {items.map((it, idx) => <li key={idx}>{it}</li>)}
+            </ul>
+          )}
           {note && <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{note}</div>}
           {file && <div className="text-xs text-emerald-600 mt-1 font-semibold truncate">{file.name}</div>}
-          {typeError && <div className="text-xs text-red-500 mt-1 font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" />Hanya file PDF yang diperbolehkan</div>}
+          {typeError && <div className="text-xs text-red-500 mt-1 font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" />{acceptError ?? "Hanya file PDF yang diperbolehkan"}</div>}
           {hasError && !typeError && <div className="text-xs text-red-500 mt-1 font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" />Berkas wajib diunggah</div>}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
@@ -137,6 +172,12 @@ function FileItem({ label, note, downloadable = false, showError = false, onFile
             <button className="p-1.5 rounded-lg bg-secondary hover:bg-muted transition-colors" title="Unduh Contoh">
               <Download className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
+          )}
+          {link && (
+            <a href={link} target="_blank" rel="noopener noreferrer"
+              className="p-1.5 rounded-lg bg-secondary hover:bg-muted transition-colors" title="Unduh / buka tautan">
+              <Download className="h-3.5 w-3.5 text-muted-foreground" />
+            </a>
           )}
           <button onClick={() => ref.current?.click()}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
@@ -146,7 +187,7 @@ function FileItem({ label, note, downloadable = false, showError = false, onFile
           </button>
         </div>
       </div>
-      <input ref={ref} type="file" accept="application/pdf" className="hidden" onChange={handleChange} />
+      <input ref={ref} type="file" accept={accept ?? "application/pdf"} className="hidden" onChange={handleChange} />
     </div>
   );
 }
@@ -163,14 +204,212 @@ const FILE_LABELS = [
   { label: "Denah Lokasi, Foto Gedung, Foto Kelas & Inventaris", note: "Dapat dikompilasi dalam satu file PDF" },
 ];
 
-function Step5Files({ onValidChange, onFilesChange }: { onValidChange: (valid: boolean) => void; onFilesChange: (files: (File | null)[]) => void }) {
-  const [files, setFiles] = useState<(File | null)[]>(Array(FILE_LABELS.length).fill(null));
+/** Blok info biru (dipakai SIMBG). */
+function InfoBlock({ items }: { items: string[] }) {
+  if (!items.length) return null;
+  return (
+    <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 flex gap-3">
+      <Info className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+      <ul className="space-y-1.5 text-xs text-blue-800 leading-relaxed list-disc pl-3">
+        {items.map((t, i) => <li key={i}>{t}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+/** Label field standar (dengan penanda wajib + tip). */
+function FieldLabel({ label, required, tip }: { label: string; required?: boolean; tip?: string }) {
+  return (
+    <div className="text-sm font-medium text-foreground flex items-center flex-wrap gap-x-0.5">
+      {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      {tip && <span className="text-xs text-muted-foreground font-normal">({tip})</span>}
+    </div>
+  );
+}
+
+const inputCls = (error?: string) =>
+  `h-10 px-3 rounded-lg border text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 transition-all w-full ${
+    error ? "border-red-400 bg-red-50/30 focus:ring-red-200 focus:border-red-400" : "border-border bg-white focus:ring-accent/25 focus:border-accent"
+  }`;
+
+/** Input angka dengan satuan di kanan (string atau dropdown). */
+function NumberField({ field, value, error, onChange }: {
+  field: PermitField; value: string; error?: string; onChange: (v: string) => void;
+}) {
+  const unit: PermitFieldUnit | undefined = field.unit;
+  const unitIsSelect = typeof unit === "object" && unit !== null;
+  const unitOptions = unitIsSelect ? (unit.options ?? [unit.placeholder ?? "Rasio"]) : [];
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-sm font-medium text-foreground flex items-center flex-wrap gap-x-0.5">
+        {field.label}{field.required && <span className="text-red-500 ml-0.5">*</span>}
+        {field.note && <span className="text-xs text-muted-foreground font-normal">({field.note})</span>}
+      </label>
+      <div className="flex gap-2">
+        <input type="number" min={field.min} placeholder={field.placeholder ?? field.label} value={value}
+          onChange={e => onChange(e.target.value)} className={inputCls(error)} />
+        {unit && !unitIsSelect && (
+          <span className="h-10 px-3 rounded-lg border border-border bg-secondary text-sm flex items-center text-muted-foreground whitespace-nowrap">{unit}</span>
+        )}
+        {unit && unitIsSelect && (
+          <select className="h-10 px-2 rounded-lg border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent/25 focus:border-accent">
+            {unitOptions.map(o => <option key={o}>{o}</option>)}
+          </select>
+        )}
+      </div>
+      {error && <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle className="h-3 w-3 flex-shrink-0" />{error}</p>}
+    </div>
+  );
+}
+
+/** Grup radio (satu pilihan). */
+function RadioField({ field, value, error, onChange }: {
+  field: PermitField; value: string; error?: string; onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <FieldLabel label={field.label} required={field.required} tip={field.note} />
+      <div className="flex flex-wrap gap-2">
+        {(field.options ?? []).map(opt => (
+          <label key={opt} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer transition-all ${
+            value === opt ? "border-accent bg-accent/5 font-semibold text-accent" : "border-border bg-white hover:border-accent/40"
+          }`}>
+            <input type="radio" name={field.id} checked={value === opt} onChange={() => onChange(opt)} className="accent-[#1a56db]" />
+            {opt}
+          </label>
+        ))}
+      </div>
+      {error && <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle className="h-3 w-3 flex-shrink-0" />{error}</p>}
+    </div>
+  );
+}
+
+/** Grup checkbox (multi-pilihan, disimpan dipisah koma). */
+function CheckboxField({ field, value, error, onChange }: {
+  field: PermitField; value: string; error?: string; onChange: (v: string) => void;
+}) {
+  const selected = value ? value.split(",").map(s => s.trim()).filter(Boolean) : [];
+  const toggle = (opt: string) => {
+    const next = selected.includes(opt) ? selected.filter(s => s !== opt) : [...selected, opt];
+    onChange(next.join(", "));
+  };
+  return (
+    <div className="flex flex-col gap-2">
+      <FieldLabel label={field.label} required={field.required} tip={field.note} />
+      <div className="flex flex-wrap gap-2">
+        {(field.options ?? []).map(opt => (
+          <label key={opt} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer transition-all ${
+            selected.includes(opt) ? "border-accent bg-accent/5 font-semibold text-accent" : "border-border bg-white hover:border-accent/40"
+          }`}>
+            <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} className="accent-[#1a56db]" />
+            {opt}
+          </label>
+        ))}
+      </div>
+      {error && <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle className="h-3 w-3 flex-shrink-0" />{error}</p>}
+    </div>
+  );
+}
+
+function PermitFieldItem({ field, value, error, onChange, onFileChange }: {
+  field: PermitField; value: string; error?: string; onChange: (v: string) => void; onFileChange?: (file: File | null) => void;
+}) {
+  if (field.type === "select") {
+    return <Sel label={field.label} options={field.options ?? []} required={field.required} value={value} onChange={onChange} error={error} tip={field.note} />;
+  }
+  if (field.type === "textarea") {
+    return <Tex label={field.label} placeholder={field.placeholder ?? field.label} required={field.required} value={value} onChange={onChange} error={error} tip={field.note} />;
+  }
+  if (field.type === "file") {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <FileItem label={field.label} note={field.note} required={field.required} accept={field.accept ?? "image/jpeg"} acceptError="Tipe file tidak diperbolehkan"
+          showError={field.required && !!error} onFileChange={file => { onChange(file ? file.name : ""); onFileChange?.(file); }} />
+      </div>
+    );
+  }
+  if (field.type === "radio") {
+    return <RadioField field={field} value={value} error={error} onChange={onChange} />;
+  }
+  if (field.type === "checkbox") {
+    return <CheckboxField field={field} value={value} error={error} onChange={onChange} />;
+  }
+  if (field.type === "number") {
+    return <NumberField field={field} value={value} error={error} onChange={onChange} />;
+  }
+  return <Inp label={field.label} placeholder={field.placeholder ?? field.label} type={field.type} required={field.required} value={value} onChange={onChange} error={error} tip={field.note} />;
+}
+
+function ConfigStep4({ config, f, err, set, onFileChange }: {
+  config: import("../app/sipFormConfig").PermitFormConfig;
+  f: Record<string, string>;
+  err: Record<string, string>;
+  set: (key: string, val: string) => void;
+  onFileChange: (key: string, file: File | null) => void;
+}) {
+  // Isi nilai default (mis. select dengan defaultValue) sekali saat mount.
+  useEffect(() => {
+    config.sections.forEach(section => section.fields.forEach(field => {
+      if (field.defaultValue && (f[field.id] ?? "") === "") set(field.id, field.defaultValue);
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div className="space-y-5">
+      {config.sections.filter(section => !section.visibleIf || (f[section.visibleIf.field] ?? "") === section.visibleIf.equals).map(section => (
+        <div key={section.title} className="bg-white rounded-2xl border border-border p-6 sm:p-8">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center"><FileText className="h-4 w-4 text-amber-600" /></div>
+            <div>
+              <h2 className="font-extrabold text-foreground" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{section.title}</h2>
+              <p className="text-xs text-muted-foreground">Lengkapi data sesuai dokumen resmi yang dimiliki</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {section.fields.map(field => (
+              <div key={field.id} className={field.type === "textarea" || field.type === "file" ? "sm:col-span-2" : ""}>
+                <PermitFieldItem field={field} value={f[field.id] ?? ""} error={err[field.id]} onFileChange={file => onFileChange(field.id, file)} onChange={v => set(field.id, v)} />
+              </div>
+            ))}
+          </div>
+          {section.info && section.info.length > 0 && <div className="mt-4"><InfoBlock items={section.info} /></div>}
+        </div>
+      ))}
+      {config.info && config.info.length > 0 && <InfoBlock items={config.info} />}
+    </div>
+  );
+}
+
+interface Step5FileLabel {
+  label: string;
+  note?: string;
+  status?: string;
+  link?: string;
+  items?: string[];
+  downloadable?: boolean;
+}
+
+function Step5Files({ onValidChange, onFilesChange, labels }: {
+  onValidChange: (valid: boolean) => void;
+  onFilesChange: (files: (File | null)[]) => void;
+  labels: Step5FileLabel[];
+}) {
+  const [files, setFiles] = useState<(File | null)[]>(Array(labels.length).fill(null));
   const [showErrors, setShowErrors] = useState(false);
+
+  useEffect(() => {
+    const next = Array(labels.length).fill(null);
+    setFiles(next);
+    setShowErrors(false);
+    onValidChange(false);
+    onFilesChange(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [labels]);
 
   const updateFile = (i: number, picked: File | null) => {
     setFiles(prev => {
       const next = [...prev]; next[i] = picked;
-      onValidChange(next.every(v => v !== null));
+      onValidChange(next.length === labels.length && labels.every((_, index) => next[index] != null));
       onFilesChange(next);
       return next;
     });
@@ -178,7 +417,7 @@ function Step5Files({ onValidChange, onFilesChange }: { onValidChange: (valid: b
 
   (Step5Files as any)._triggerValidation = () => setShowErrors(true);
 
-  const allFilled = files.every(v => v !== null);
+  const allFilled = labels.length > 0 && files.length === labels.length && labels.every((_, index) => files[index] != null);
   const filled = files.filter(v => v !== null).length;
 
   return (
@@ -194,26 +433,27 @@ function Step5Files({ onValidChange, onFilesChange }: { onValidChange: (valid: b
       </div>
       <div className="flex items-center justify-between bg-secondary/50 rounded-xl px-4 py-3 mt-4 mb-2">
         <span className="text-xs text-muted-foreground font-medium">Progress unggah berkas</span>
-        <span className="text-xs font-bold text-foreground tabular-nums">{filled} / {FILE_LABELS.length}</span>
+        <span className="text-xs font-bold text-foreground tabular-nums">{filled} / {labels.length}</span>
       </div>
       <div className="h-1.5 bg-secondary rounded-full overflow-hidden mb-5">
         <div className={`h-full rounded-full transition-all duration-500 ${allFilled ? "bg-emerald-500" : "bg-accent"}`}
-          style={{ width: `${(filled / FILE_LABELS.length) * 100}%` }} />
+          style={{ width: `${labels.length ? (filled / labels.length) * 100 : 0}%` }} />
       </div>
       <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-2.5 text-xs text-amber-800 mb-5">
         <Info className="h-4 w-4 text-amber-500 flex-shrink-0" />
         Pastikan semua dokumen terbaca jelas, dalam format <strong>PDF</strong>, dan berukuran di bawah 5 MB sebelum diunggah.
       </div>
       <div className="space-y-3">
-        {FILE_LABELS.map((item, i) => (
+        {labels.map((item, i) => (
           <FileItem key={i} label={item.label} note={item.note} downloadable={item.downloadable}
+            status={item.status} link={item.link} items={item.items}
             showError={showErrors} onFileChange={picked => updateFile(i, picked)} />
         ))}
       </div>
       {showErrors && !allFilled && (
         <div className="mt-4 flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-          <span>Masih ada <strong>{FILE_LABELS.length - filled} berkas</strong> yang belum diunggah. Lengkapi semua berkas sebelum mengajukan permohonan.</span>
+          <span>Masih ada <strong>{labels.length - filled} berkas</strong> yang belum diunggah. Lengkapi semua berkas sebelum mengajukan permohonan.</span>
         </div>
       )}
     </div>
@@ -353,6 +593,10 @@ const DEFAULT_FORM: Record<string, string> = {
 
 export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => void; auth: AuthUser | null; profile: UserProfile | null }) {
   const [serviceType, setServiceType] = useState<ServiceType | null>(null);
+  const [pendingService, setPendingService] = useState<ServiceType | null>(null);
+  const [creatingDraft, setCreatingDraft] = useState(false);
+  const creatingDraftRef = useRef(false);
+  const { items: permitTypes } = usePermitTypes();
   const [step, setStep] = useState(1);
   const [skipCompany, setSkipCompany] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -360,9 +604,31 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
   const [err, setErr] = useState<Record<string, string>>({});
   const [step5Valid, setStep5Valid] = useState(false);
   const [step5Touched, setStep5Touched] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<(File | null)[]>(Array(FILE_LABELS.length).fill(null));
+  const [uploadedFiles, setUploadedFiles] = useState<(File | null)[]>([]);
+  const [step4FilesByField, setStep4FilesByField] = useState<Record<string, File | null>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const selectedPermitValue = f[PERMIT_FIELDS.value] ?? "";
+  const permitConfig = SIP_FORM_CONFIG[selectedPermitValue] ?? (serviceType ? SIP_FORM_CONFIG[serviceType] : undefined);
+  const step5Labels: Step5FileLabel[] = permitConfig?.files ?? FILE_LABELS;
+  const step4FileFields = permitConfig?.sections
+    .filter(section => !section.visibleIf || f[section.visibleIf.field] === section.visibleIf.equals)
+    .flatMap(section => section.fields)
+    .filter(field => field.type === "file") ?? [];
+  const step4Files = step4FileFields
+    .map(field => ({ file: step4FilesByField[field.id] ?? null, label: field.label }))
+    .filter((item): item is { file: File; label: string } => item.file !== null);
+  // Labels are stored in a VARCHAR(150) column by the API. Keep the full
+  // explanatory text in the UI, but send a bounded label during submission.
+  const uploadLabels = step5Labels.map(item => item.label.slice(0, 150));
+  // SIMBG & OSS RBA tidak punya Tahap 5 (Upload Berkas) — wizard berakhir di Tahap 4 lalu submit.
+  const hasStep5 = serviceType !== "simbg" && serviceType !== "oss";
+  // Untuk OSS, Tahap 4 adalah Data Usaha (bukan Data Permohonan).
+  const step4Label = serviceType === "oss" ? "Data Usaha" : "Data Permohonan";
+  const totalSteps = hasStep5 ? 5 : 4;
+  const stepLabels = hasStep5
+    ? undefined
+    : ["Data Pemohon", "Lokasi Izin", "Data Perusahaan", step4Label];
   const [submittedCode, setSubmittedCode] = useState("");
 
   // Assistance mode from profile
@@ -429,13 +695,16 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
   });
 
   const set = (key: string, val: string) => {
+    const nextForm = { ...f, [key]: val };
     setF(prev => {
       const next = { ...prev, [key]: val };
       const draft = currentDraft(next);
       if (draft) scheduleSave(draft);
       return next;
     });
-    if (val.trim()) setErr(prev => { const n = { ...prev }; delete n[key]; return n; });
+    // Revalidate the complete current step with the new value. This keeps
+    // required, format, choice, and schema errors in sync after every edit.
+    setErr(errorsForStep(step, nextForm));
   };
 
   // Save when step / serviceType / skipCompany changes
@@ -446,19 +715,30 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
   }, [step, serviceType, skipCompany]);
 
   // Start a brand-new form with a fresh draft ID
-  const startNew = async (svcType: ServiceType) => {
+  const startNew = async (svcType: ServiceType, permit?: PermitType) => {
+    if (creatingDraftRef.current) return;
+    if (needsPermitType(svcType) && !permit) { setPendingService(svcType); return; }
+    const initialForm = { ...DEFAULT_FORM, ...(permit ? {
+      [PERMIT_FIELDS.value]: permit.value, [PERMIT_FIELDS.name]: permit.name,
+    } : {}) };
+    creatingDraftRef.current = true;
+    setCreatingDraft(true);
     setSubmitError("");
     try {
-      const created = await api.createDraft({ service_type: svcType, current_step: 1, skip_company: false, form_data: DEFAULT_FORM });
+      const created = await api.createDraft({ service_type: svcType, current_step: 1, skip_company: false, form_data: initialForm });
       draftId.current = created.id;
       setDrafts(current => [fromApiDraft(created), ...current]);
     } catch (e) {
       setSubmitError(e instanceof ApiError ? e.firstValidationMessage() : "Draft baru gagal dibuat.");
       return;
+    } finally {
+      creatingDraftRef.current = false;
+      setCreatingDraft(false);
     }
+    setPendingService(null);
     setServiceType(svcType);
     setStep(1);
-    setF(DEFAULT_FORM);
+    setF(initialForm);
     setSkipCompany(false);
     setErr({});
   };
@@ -469,7 +749,7 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
     setServiceType(d.serviceType);
     setStep(d.step);
     setSkipCompany(d.skipCompany);
-    setF(d.formData);
+    setF({ ...DEFAULT_FORM, ...d.formData });
     setErr({});
   };
 
@@ -497,10 +777,20 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
   };
 
   const required = (s: number): Array<{ key: string; label: string; rule?: (v: string) => string | null }> => {
+    if (s === 4) {
+      const config = permitConfig;
+      if (config) {
+        return config.sections
+          .filter(sec => !sec.visibleIf || (f[sec.visibleIf.field] ?? "") === sec.visibleIf.equals)
+          .flatMap(sec => sec.fields)
+          .filter(field => field.required && field.type !== "file")
+          .map(field => ({ key: field.id, label: field.label }));
+      }
+    }
     if (s === 1) return [
       { key: "ktp", label: "No. KTP", rule: v => /^\d{16}$/.test(v) ? null : "NIK harus 16 digit angka" },
       { key: "name", label: "Nama Lengkap" },
-      { key: "phone", label: "No. HP / WhatsApp", rule: v => v.length >= 8 ? null : "Nomor tidak valid" },
+      { key: "phone", label: "No. HP / WhatsApp", rule: v => validateFormat(v, "tel") },
       { key: "province", label: "Provinsi" },
       { key: "city", label: "Kabupaten / Kota" },
       { key: "district", label: "Kecamatan" },
@@ -515,9 +805,9 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
     ];
     if (s === 3 && !skipCompany) return [
       { key: "companyName", label: "Nama Perusahaan" },
-      { key: "companyNpwp", label: "NPWP Perusahaan" },
-      { key: "companyPhone", label: "Nomor Telepon" },
-      { key: "companyEmail", label: "Email Perusahaan", rule: v => /\S+@\S+\.\S+/.test(v) ? null : "Format email tidak valid" },
+      { key: "companyNpwp", label: "NPWP Perusahaan", rule: v => validateFormat(v, "npwp") },
+      { key: "companyPhone", label: "Nomor Telepon", rule: v => validateFormat(v, "tel") },
+      { key: "companyEmail", label: "Email Perusahaan", rule: v => validateFormat(v, "email") },
       { key: "businessType", label: "Bidang Usaha" },
       { key: "companyProvince", label: "Provinsi" },
       { key: "companyCity", label: "Kabupaten / Kota" },
@@ -530,7 +820,7 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
       { key: "decAddress", label: "Alamat Pemohon (SK)" },
       { key: "education", label: "Jenis Pendidikan" },
       { key: "position", label: "Jabatan" },
-      { key: "decPhone", label: "Nomor Telepon / Fax" },
+      { key: "decPhone", label: "Nomor Telepon / Fax", rule: v => validateFormat(v, "tel") },
       { key: "institutionLembaga", label: "Nama Lembaga Kursus" },
       { key: "instName", label: "Nama Lembaga (Detail)" },
       { key: "instAddress", label: "Alamat Lembaga" },
@@ -538,34 +828,68 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
       { key: "building", label: "Gedung / Ruangan" },
       { key: "equipment", label: "Peralatan & Fasilitas" },
       { key: "curriculum", label: "Rencana Pelajaran" },
-      { key: "students", label: "Jumlah Siswa" },
+      { key: "students", label: "Jumlah Siswa", rule: v => /^\d+$/.test(v) && Number.isSafeInteger(Number(v)) ? null : "Jumlah siswa harus bilangan bulat nol atau lebih" },
       { key: "fees", label: "Biaya Kursus" },
     ];
     return [];
   };
 
-  const validate = (s: number) => {
+  const errorsForStep = (s: number, values: Record<string, string> = f): Record<string, string> => {
+    if (s === 5) return {}; // Uploads have their own validation, not the scraped table fields.
     const fields = required(s);
     const newErr: Record<string, string> = {};
     for (const { key, label, rule } of fields) {
-      const val = f[key]?.trim() ?? "";
+      const val = values[key]?.trim() ?? "";
       if (!val) { newErr[key] = `${label} wajib diisi`; continue; }
       if (rule) { const msg = rule(val); if (msg) newErr[key] = msg; }
     }
-    setErr(newErr);
-    return Object.keys(newErr).length === 0;
+    const optional: Array<[string, "npwp" | "postal" | "tel"]> = s === 1 ? [["npwp", "npwp"], ["postal", "postal"]] : s === 3 && !skipCompany ? [["companyFax", "tel"]] : [];
+    optional.forEach(([key, format]) => {
+      const error = validateFormat(values[key] ?? "", format);
+      if (error) newErr[key] = error;
+    });
+    const choices: Record<string, string[]> = { province: provinces, city: cities, district: districts, village: villages, permitCity: cities, permitDistrict: districts, permitVillage: villages, companyProvince: provinces, companyCity: cities, companyDistrict: districts, companyVillage: villages };
+    fields.forEach(({ key, label }) => {
+      if (values[key]?.trim() && choices[key] && !choices[key].includes(values[key])) newErr[key] = `Pilih ${label} dari pilihan yang tersedia`;
+    });
+
+    return newErr;
+  };
+
+  const validate = (s: number) => {
+    const errors = errorsForStep(s);
+    setErr(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const go = async (dir: 1 | -1) => {
+    if (submitting) return;
+    if (dir === 1 && needsPermitType(serviceType) && !permitTypes?.some(p => p.value === f[PERMIT_FIELDS.value])) {
+      setSubmitError("Pilih jenis perizinan terlebih dahulu.");
+      return;
+    }
     if (dir === -1 && step === 1) { draftId.current = null; setServiceType(null); setSelView("list"); return; }
-    if (dir === 1 && step === 5) {
-      setStep5Touched(true);
-      if (!step5Valid) { (Step5Files as any)._triggerValidation?.(); window.scrollTo({ top: 200, behavior: "smooth" }); return; }
+    const lastStep = totalSteps;
+    if (dir === 1 && step === lastStep) {
+      for (const previousStep of [1, 2, 3, 4] as const) {
+        if (previousStep >= step) continue;
+        const errors = errorsForStep(previousStep);
+        if (Object.keys(errors).length) {
+          setStep(previousStep);
+          setErr(errors);
+          window.scrollTo({ top: 200, behavior: "smooth" });
+          return;
+        }
+      }
+      if (hasStep5) {
+        setStep5Touched(true);
+        if (!step5Valid) { (Step5Files as any)._triggerValidation?.(); window.scrollTo({ top: 200, behavior: "smooth" }); return; }
+      }
     }
     if (dir === 1 && !validate(step)) { window.scrollTo({ top: 200, behavior: "smooth" }); return; }
     const next = step + dir;
-    if (next > 5) {
-      if (!serviceType || uploadedFiles.some(file => file === null) || submitting) return;
+    if (next > lastStep) {
+      if (!serviceType || (serviceType === "sip" && (!step5Valid || uploadedFiles.length !== step5Labels.length || !step5Labels.every((_, index) => uploadedFiles[index] != null))) || submitting) return;
       setSubmitting(true);
       setSubmitError("");
       try {
@@ -574,15 +898,25 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
           skipCompany,
           draftId: draftId.current,
           formData: f,
-          files: uploadedFiles.filter((file): file is File => file !== null),
-          labels: FILE_LABELS.map(item => item.label),
+          files: serviceType === "simbg"
+            ? step4Files.map(item => item.file)
+            : serviceType === "oss" ? [] : uploadedFiles.filter((file): file is File => file !== null),
+          labels: serviceType === "simbg"
+            ? step4Files.map(item => item.label)
+            : serviceType === "oss" ? [] : uploadLabels,
         });
         setSubmittedCode(application.code);
         if (draftId.current) setDrafts(current => current.filter(d => d.id !== draftId.current));
         draftId.current = null;
         setSubmitted(true);
       } catch (e) {
-        setSubmitError(e instanceof ApiError ? e.firstValidationMessage() : "Permohonan gagal diajukan.");
+        if (e instanceof ApiError && e.status === 422 && Object.keys(e.errors).length) {
+          const details = Object.entries(e.errors)
+            .flatMap(([field, messages]) => messages.map(message => `${field.replace(/^form_data\./, "")}: ${message}`));
+          setSubmitError(`Data belum valid: ${details.join("; ")}`);
+        } else {
+          setSubmitError(e instanceof ApiError ? e.firstValidationMessage() : "Permohonan gagal diajukan.");
+        }
         window.scrollTo({ top: 0, behavior: "smooth" });
       } finally {
         setSubmitting(false);
@@ -615,6 +949,28 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
   }
 
   // ─── Service selection + draft list ───────────────────────────────────────
+
+  if (pendingService || (serviceType && needsPermitType(serviceType) && !f[PERMIT_FIELDS.value])) {
+    const svc = pendingService ?? serviceType!;
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-10">
+        {submitError && <p role="alert" className="mb-4 text-sm text-red-600">{submitError}</p>}
+        <fieldset disabled={creatingDraft}>
+          <PermitTypePicker serviceLabel={SERVICE_META[svc].label}
+            onBack={() => { setPendingService(null); setServiceType(null); draftId.current = null; setSelView("pick-service"); }}
+            onSelect={permit => {
+              if (serviceType && draftId.current) {
+                const next = { ...f, [PERMIT_FIELDS.value]: permit.value, [PERMIT_FIELDS.name]: permit.name };
+                setF(next);
+                const draft = currentDraft(next);
+                if (draft) scheduleSave(draft);
+              } else { void startNew(svc, permit); }
+            }} />
+        </fieldset>
+        {creatingDraft && <p role="status" className="mt-4 text-sm">Menyiapkan formulir…</p>}
+      </div>
+    );
+  }
 
   if (!serviceType) {
     return (
@@ -707,6 +1063,7 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
                               <p className="text-base font-bold text-foreground truncate">
                                 {meta?.label ?? "Layanan belum dipilih"}
                               </p>
+                              {d.formData[PERMIT_FIELDS.name] && <p className="text-sm text-accent">{d.formData[PERMIT_FIELDS.name]}</p>}
                               <div className="flex items-center gap-2 mt-1 flex-wrap">
                                 <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
                                   {STEP_LABELS[d.step] ?? `Langkah ${d.step}`}
@@ -857,7 +1214,7 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
               <span className="hidden sm:inline">Simpan Draft</span>
             </button>
           </div>
-          <StepIndicator current={step} />
+          <StepIndicator current={step} labels={stepLabels} />
         </div>
       </div>
 
@@ -878,6 +1235,18 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
         )}
 
         {/* Step 1 */}
+        {needsPermitType(serviceType) && (
+          <details className="mb-6 rounded-xl border border-border bg-white p-4">
+            <summary className="cursor-pointer font-semibold text-sm">
+              {f[PERMIT_FIELDS.name]} — Informasi & Persyaratan
+            </summary>
+            <div className="mt-4">
+              {permitTypes?.find(p => p.value === f[PERMIT_FIELDS.value]) ? (
+                <PermitInfo permit={permitTypes.find(p => p.value === f[PERMIT_FIELDS.value])!} compact />
+              ) : <p className="text-sm text-muted-foreground">Informasi perizinan belum tersedia.</p>}
+            </div>
+          </details>
+        )}
         {step === 1 && (
           <div className="bg-white rounded-2xl border border-border p-6 sm:p-8">
             <div className="flex items-center gap-3 mb-6">
@@ -889,7 +1258,7 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Inp label="No. KTP (NIK)" placeholder="16 digit Nomor Induk Kependudukan" required value={f.ktp} onChange={v => set("ktp", v)} error={err.ktp} tip={t("ktp")} />
-              <Inp label="No. NPWP" placeholder="XX.XXX.XXX.X-XXX.XXX (opsional)" value={f.npwp} onChange={v => set("npwp", v)} tip={t("npwp")} />
+                <Inp label="NPWP" placeholder="XX.XXX.XXX.X-XXX.XXX" value={f.npwp} onChange={v => set("npwp", v)} error={err.npwp} tip={t("npwp")} />
               <div className="sm:col-span-2">
                 <Inp label="Nama Lengkap Pemohon" placeholder="Nama sesuai KTP" required value={f.name} onChange={v => set("name", v)} error={err.name} tip={t("name")} />
               </div>
@@ -963,7 +1332,7 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
                 <Inp label="NPWP Perusahaan" placeholder="XX.XXX.XXX.X-XXX.XXX" required value={f.companyNpwp} onChange={v => set("companyNpwp", v)} error={err.companyNpwp} tip={t("companyNpwp")} />
                 <Inp label="Nomor Telepon" placeholder="(021) xxx-xxxx" type="tel" required value={f.companyPhone} onChange={v => set("companyPhone", v)} error={err.companyPhone} tip={t("companyPhone")} />
                 <Inp label="Email Perusahaan" placeholder="info@perusahaan.com" type="email" required value={f.companyEmail} onChange={v => set("companyEmail", v)} error={err.companyEmail} tip={t("companyEmail")} />
-                <Inp label="Nomor Fax" placeholder="(021) xxx-xxxx" value={f.companyFax} onChange={v => set("companyFax", v)} tip={t("companyFax")} />
+                <Inp label="Kode Pos" placeholder="15310" value={f.postal} onChange={v => set("postal", v)} error={err.postal} tip={t("postal")} />
                 <div className="sm:col-span-2">
                   <Sel label="Bidang Usaha" options={["Jasa Pendidikan & Kursus", "Perdagangan Retail", "Industri Makanan & Minuman", "Jasa Kecantikan", "Fasilitas Kesehatan", "Industri Manufaktur", "Jasa Pariwisata"]} required value={f.businessType} onChange={v => set("businessType", v)} error={err.businessType} tip={t("businessType")} />
                 </div>
@@ -974,14 +1343,16 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
                 <div className="sm:col-span-2">
                   <Tex label="Alamat Lengkap Perusahaan" placeholder="Alamat lengkap kantor / tempat usaha..." required value={f.companyAddress} onChange={v => set("companyAddress", v)} error={err.companyAddress} tip={t("companyAddress")} />
                 </div>
-                <Inp label="Kode Pos" placeholder="XXXXX" value={f.zipCode} onChange={v => set("zipCode", v)} tip={t("zipCode")} />
+                <Inp label="Nomor Fax" placeholder="(021) xxx-xxxx" value={f.companyFax} onChange={v => set("companyFax", v)} error={err.companyFax} tip={t("companyFax")} />
               </div>
             )}
           </div>
         )}
 
         {/* Step 4 */}
-        {step === 4 && (
+        {step === 4 && permitConfig ? (
+          <ConfigStep4 config={permitConfig} f={f} err={err} set={set} onFileChange={(key, file) => setStep4FilesByField(current => ({ ...current, [key]: file }))} />
+        ) : step === 4 && (
           <div className="space-y-5">
             <div className="bg-white rounded-2xl border border-border p-6 sm:p-8">
               <div className="flex items-center gap-3 mb-6">
@@ -1022,8 +1393,9 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
           </div>
         )}
 
+
         {/* Step 5 */}
-        {step === 5 && <Step5Files onValidChange={setStep5Valid} onFilesChange={setUploadedFiles} />}
+        <div hidden={step !== 5}><Step5Files onValidChange={setStep5Valid} onFilesChange={setUploadedFiles} labels={step5Labels} /></div>
 
         {/* Assistance tip banner */}
         {showTip && (
@@ -1043,17 +1415,17 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
             {step === 1 ? "Batal" : "Sebelumnya"}
           </button>
           <div className="text-xs text-muted-foreground font-medium tabular-nums">
-            Langkah <span className="text-foreground font-bold">{step}</span> dari 5
+            Langkah <span className="text-foreground font-bold">{step}</span> dari {totalSteps}
           </div>
           <button onClick={() => void go(1)}
-            disabled={submitting || (step === 5 && step5Touched && !step5Valid)}
+            disabled={submitting || (hasStep5 && step === 5 && step5Touched && !step5Valid)}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-bold transition-all shadow-md ${
-              step === 5 && step5Touched && !step5Valid
+              hasStep5 && step === 5 && step5Touched && !step5Valid
                 ? "bg-accent/40 cursor-not-allowed shadow-none"
                 : "bg-accent hover:bg-blue-700 shadow-accent/20"
             }`}>
-            {submitting ? "Mengunggah..." : step === 5 ? "Ajukan Permohonan" : "Selanjutnya"}
-            {step < 5 ? <ChevronRight className="h-4 w-4" /> : <Check className="h-4 w-4" />}
+            {submitting ? "Mengunggah..." : step === totalSteps ? "Ajukan Permohonan" : "Selanjutnya"}
+            {step < totalSteps ? <ChevronRight className="h-4 w-4" /> : <Check className="h-4 w-4" />}
           </button>
         </div>
       </div>

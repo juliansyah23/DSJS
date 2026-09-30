@@ -361,6 +361,9 @@ function RecentApplications() {
 
 // ── Reusable app table ────────────────────────────────────────────────────────
 function ApplicationCells({ app, recent = false }: { app: AppRow; recent?: boolean }) {
+  const submitted = new Date(app.date).getTime();
+  const ageDays = Number.isNaN(submitted) ? null : Math.max(0, Math.floor((Date.now() - submitted) / 86_400_000));
+  const needsAttention = ageDays !== null && ageDays >= 7 && app.status !== "approved" && app.status !== "rejected";
   return (
     <>
       <td className="px-6 py-3.5">
@@ -380,6 +383,9 @@ function ApplicationCells({ app, recent = false }: { app: AppRow; recent?: boole
       <td className="px-6 py-3.5 whitespace-nowrap"><Badge status={app.status} /></td>
       <td className="px-6 py-3.5">
         <span className="text-xs text-muted-foreground whitespace-nowrap tabular-nums">{app.date}</span>
+        {!recent && <span className={`mt-1 block text-[10px] whitespace-nowrap ${needsAttention ? "font-semibold text-amber-700" : "text-muted-foreground"}`}>
+          {ageDays === null ? "Usia tidak tersedia" : `${ageDays} hari${needsAttention ? " · perlu perhatian" : ""}`}
+        </span>}
       </td>
       <td className="px-6 py-3.5">
         <span className="text-xs text-muted-foreground whitespace-nowrap">{app.officer}</span>
@@ -406,7 +412,7 @@ function AppTable({ apps, onSelect }: { apps: AppRow[]; onSelect?: (app: AppRow)
             <tr key={app.id} className="hover:bg-secondary/20 transition-colors group">
               <ApplicationCells app={app} recent />
               <td className="px-6 py-3.5 w-16">
-                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-0.5">
                   <button
                     type="button"
                     onClick={() => onSelect?.(app)}
@@ -415,7 +421,9 @@ function AppTable({ apps, onSelect }: { apps: AppRow[]; onSelect?: (app: AppRow)
                   >
                     <Eye className="h-3.5 w-3.5 text-accent" />
                   </button>
-                  <button className="p-1.5 rounded-lg hover:bg-secondary transition-colors"><MoreVertical className="h-3.5 w-3.5 text-muted-foreground" /></button>
+                  <button type="button" onClick={() => onSelect?.(app)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors" aria-label={`Proses ${app.code}`}>
+                    Proses <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </td>
             </tr>
@@ -521,9 +529,6 @@ function PagePermohonan({ colorBlind }: { colorBlind?: boolean }) {
           <button onClick={exportCsv} disabled={rows.length === 0} className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-border text-xs font-600 text-muted-foreground hover:bg-secondary transition-colors shadow-sm disabled:opacity-50">
             <Download className="h-3.5 w-3.5" /> Export CSV
           </button>
-          <button className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-white text-xs font-700 hover:bg-primary/90 transition-colors shadow-sm">
-            <Plus className="h-3.5 w-3.5" /> Permohonan Baru
-          </button>
         </div>
       </div>
 
@@ -542,14 +547,14 @@ function PagePermohonan({ colorBlind }: { colorBlind?: boolean }) {
 
       {/* Filters */}
       <Panel className="p-4">
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-3 lg:flex-row">
           <div className="flex items-center gap-2 flex-1 bg-secondary rounded-lg px-3.5 py-2">
             <Search className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
             <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
               placeholder="Cari nama pemohon atau nomor permohonan..."
               className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none w-full" style={{ fontFamily: FONT_BODY }} />
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {[
               { val: serviceFilter, set: (v: string) => { setServiceFilter(v); setPage(1); }, opts: [["all","Semua Layanan"],["sip","SIP"],["oss","OSS RBA"],["simbg","SIMBG"]] },
             ].map(({ val, set, opts }, i) => (
@@ -563,7 +568,7 @@ function PagePermohonan({ colorBlind }: { colorBlind?: boolean }) {
             ))}
           </div>
         </div>
-        <div className="flex gap-1.5 mt-3">
+        <div className="mt-3 flex flex-wrap gap-1.5">
           {[["all","Semua"],["approved","Disetujui"],["review","Review"],["pending","Pending"],["rejected","Ditolak"]].map(([k,l]) => {
             const cnt = counts[k as keyof typeof counts] ?? counts.all;
             return (
@@ -576,7 +581,13 @@ function PagePermohonan({ colorBlind }: { colorBlind?: boolean }) {
               </button>
             );
           })}
+          <button type="button" onClick={() => { setSearch(""); setServiceFilter("all"); setStatusFilter("all"); setPage(1); }}
+            disabled={!search && serviceFilter === "all" && statusFilter === "all"}
+            className="ml-auto rounded-lg px-3 py-1.5 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:invisible">
+            Reset filter
+          </button>
         </div>
+        {(search || serviceFilter !== "all" || statusFilter !== "all") && <p className="mt-3 text-xs text-muted-foreground" role="status">Filter aktif — hasil dan usia permohonan dihitung dari data halaman ini.</p>}
       </Panel>
 
       {/* Table */}
@@ -602,7 +613,7 @@ function PagePermohonan({ colorBlind }: { colorBlind?: boolean }) {
                   <tr key={app.id} className="hover:bg-secondary/20 transition-colors group">
                     <ApplicationCells app={app} />
                     <td className="px-6 py-3.5">
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-0.5">
                         <button onClick={() => setSelectedId(app.id)} className="p-1.5 rounded-lg hover:bg-accent/10 transition-colors" title="Detail dan proses" aria-label={`Detail ${app.code}`}><Eye className="h-3.5 w-3.5 text-accent" /></button>
                         <button onClick={() => setSelectedId(app.id)} className="p-1.5 rounded-lg hover:bg-secondary transition-colors" title="Lihat dokumen untuk diunduh" aria-label={`Dokumen ${app.code}`}><Download className="h-3.5 w-3.5 text-muted-foreground" /></button>
                       </div>
