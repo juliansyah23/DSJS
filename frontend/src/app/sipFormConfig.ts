@@ -64,14 +64,33 @@ export interface PermitFormConfig {
   info?: string[];
 }
 
+const SIP_OPTIONS = ["SIP KESATU", "SIP KEDUA", "SIP KETIGA"];
+const YES_NO_OPTIONS = ["Ya", "Tidak"];
+const STR_COPY_OPTIONS = ["01", "02", "03"];
+const PRACTICE_PLACE_OPTIONS = [
+  "Rumah Sakit", "Puskesmas", "Klinik", "Balai Pengobatan", "Pribadi", "Apotek", "Laboratorium",
+  "Produsen sediaan Farmasi dan Alat Kesehatan", "Distributor Sediaan Farmasi dan Alat Kesehatan",
+  "Fasilitas pelayanan kefarmasian", "Fasilitas lain yang telah memiliki perizinan berusaha",
+];
+const PROFESSION_OPTIONS = [
+  "Dokter Umum", "Dokter Spesialis", "Dokter Gigi", "Perawat", "Perawat Gigi", "Bidan", "Penataan Anestesi",
+  "Apoteker", "Tenaga Kefarmasian", "Ahli Lab. Medik", "Radiografer", "Fisioterapis", "Optisien", "Tenaga Gizi",
+  "Sanitarian", "Elektromedis", "Terapis Wicara", "Okupasi Terapis", "Tenaga Kesehatan Tradisional",
+  "Penyehat Tradisional", "Rekam Medis", "Ortotis Prostetis", "Psikologi Klinis", "Teknisi Kardiovaskuler", "Fisika Medik",
+];
+const CORRECTION_OPTIONS = [
+  "Nama", "Tempat/Tanggal Lahir", "Alamat", "Nomor STR", "SIP Ke", "Nama Tempat Praktik",
+  "Alamat Tempat Praktik", "Nama profesi", "Hari Praktik", "Masa Berlaku SIP", "Jam Praktik",
+];
+
 const SIP_267: PermitFormConfig = {
   sections: [
     {
       title: "DATA UMUM",
       fields: [
         { id: "nomorKtp", label: "Nomor KTP", type: "text", required: true },
-        { id: "sipKeberapa", label: "SIP keberapa", type: "select", required: true, options: ["SIP KESATU", "SIP KEDUA", "SIP KETIGA"] },
-        { id: "bpjsKetenagakerjaan", label: "Kepesertaan BPJS Ketenagakerjaan (Pilih Ya atau Tidak)", type: "select", required: true, options: ["Ya", "Tidak"] },
+        { id: "sipKeberapa", label: "SIP keberapa", type: "select", required: true, options: SIP_OPTIONS },
+        { id: "bpjsKetenagakerjaan", label: "Kepesertaan BPJS Ketenagakerjaan (Pilih Ya atau Tidak)", type: "select", required: true, options: YES_NO_OPTIONS },
       ],
     },
     {
@@ -82,18 +101,18 @@ const SIP_267: PermitFormConfig = {
         { id: "tanggalLahir", label: "Tanggal Lahir", type: "date", required: true },
         { id: "alamatPemohon", label: "Alamat Pemohon", type: "textarea", required: true },
         { id: "nomorStr", label: "Nomor STR", type: "text", required: true },
-        { id: "strSalinanKe", label: "STR Salinan Ke", type: "select", required: true, options: ["01", "02", "03"] },
+        { id: "strSalinanKe", label: "STR Salinan Ke", type: "select", required: true, options: STR_COPY_OPTIONS },
         { id: "nomorSerkomSkp", label: "Nomor serkom atau surat keterangan pemenuhan SKP", type: "text", required: true },
         { id: "tempatPraktik", label: "Tempat Praktik", type: "text", required: true },
         {
           id: "jenisTempatPraktik", label: "Jenis Tempat Praktik", type: "select", required: true,
-          options: ["Rumah Sakit", "Puskesmas", "Klinik", "Balai Pengobatan", "Pribadi", "Apotek", "Laboratorium", "Produsen sediaan Farmasi dan Alat Kesehatan", "Distributor Sediaan Farmasi dan Alat Kesehatan", "Fasilitas pelayanan kefarmasian", "Fasilitas lain yang telah memiliki perizinan berusaha"],
+          options: PRACTICE_PLACE_OPTIONS,
         },
         { id: "masaBerlakuStr", label: "Masa Berlaku STR", type: "date", required: true },
         { id: "hariPraktikShift1", label: "Hari Praktik Shift 1", type: "text", required: true, placeholder: "contoh: Senin - Jumat" },
         {
           id: "untukPraktik", label: "Untuk Praktik", type: "select", required: true,
-          options: ["Dokter Umum", "Dokter Spesialis", "Dokter Gigi", "Perawat", "Perawat Gigi", "Bidan", "Penataan Anestesi", "Apoteker", "Tenaga Kefarmasian", "Ahli Lab. Medik", "Radiografer", "Fisioterapis", "Optisien", "Tenaga Gizi", "Sanitarian", "Elektromedis", "Terapis Wicara", "Okupasi Terapis", "Tenaga Kesehatan Tradisional", "Penyehat Tradisional", "Rekam Medis", "Ortotis Prostetis", "Psikologi Klinis", "Teknisi Kardiovaskuler", "Fisika Medik"],
+          options: PROFESSION_OPTIONS,
         },
         { id: "jamMulaiShift1", label: "Jam mulai Praktik Kerja Shift 1", type: "text", required: true, placeholder: "contoh: 08:00" },
         { id: "jamSelesaiShift1", label: "Jam Selesai Praktik Kerja Shift 1", type: "text", required: true, placeholder: "contoh: 14:00" },
@@ -108,9 +127,8 @@ const SIP_267: PermitFormConfig = {
         { id: "nomorSkSipLama", label: "Nomor SK SIP Lama", type: "textarea", required: false },
         { id: "tanggalSkTerbit", label: "Tanggal SK Terbit", type: "date", required: false },
         { id: "pendidikan", label: "Pendidikan", type: "textarea", required: true },
-        {
-          id: "jenisPerbaikan", label: "Jenis Perbaikan", type: "select", required: false,
-          options: ["Nama", "Tempat/Tanggal Lahir", "Alamat", "Nomor STR", "SIP Ke", "Nama Tempat Praktik", "Alamat Tempat Praktik", "Nama profesi", "Hari Praktik", "Masa Berlaku SIP", "Jam Praktik"],
+        { id: "jenisPerbaikan", label: "Jenis Perbaikan", type: "select", required: false,
+          options: CORRECTION_OPTIONS,
         },
       ],
     },
@@ -163,8 +181,8 @@ const SIP_449: PermitFormConfig = {
       title: "DATA UMUM",
       fields: [
         { id: "nomorKtp", label: "Nomor KTP", type: "text", required: true },
-        { id: "sipKeberapa", label: "SIP keberapa", type: "select", required: true, options: ["SIP KESATU", "SIP KEDUA", "SIP KETIGA"] },
-        { id: "bpjsKetenagakerjaan", label: "Kepesertaan BPJS Ketenagakerjaan", type: "select", required: true, options: ["Ya", "Tidak"] },
+        { id: "sipKeberapa", label: "SIP keberapa", type: "select", required: true, options: SIP_OPTIONS },
+        { id: "bpjsKetenagakerjaan", label: "Kepesertaan BPJS Ketenagakerjaan", type: "select", required: true, options: YES_NO_OPTIONS },
       ],
     },
     {

@@ -19,20 +19,29 @@ if (process.argv.length > 3) {
   process.exit(1);
 }
 
-const input = resolve(repositoryRoot, requestedInput ?? "detail.json");
-const inputRelativeToRoot = relative(repositoryRoot, input);
-const isOutsideRepository = (pathRelativeToRoot) =>
-  isAbsolute(pathRelativeToRoot) ||
-  pathRelativeToRoot === ".." ||
-  pathRelativeToRoot.startsWith("..\\") ||
-  pathRelativeToRoot.startsWith("../");
+let canonicalRepositoryRoot;
+try {
+  canonicalRepositoryRoot = realpathSync(repositoryRoot);
+} catch {
+  console.error(`Repository tidak ditemukan: ${repositoryRoot}`);
+  process.exit(1);
+}
+
+const input = resolve(canonicalRepositoryRoot, requestedInput ?? "detail.json");
+const isOutsideRepository = (candidate, root = canonicalRepositoryRoot) => {
+  const pathRelativeToRoot = relative(root, candidate);
+  return (
+    !pathRelativeToRoot ||
+    isAbsolute(pathRelativeToRoot) ||
+    pathRelativeToRoot === ".." ||
+    pathRelativeToRoot.startsWith("..\\") ||
+    pathRelativeToRoot.startsWith("../")
+  );
+};
 
 // The input is a CLI argument, so do not allow it to escape the repository.
 // Resolve the existing file as well to prevent a symlink from bypassing this check.
-if (
-  !inputRelativeToRoot ||
-  isOutsideRepository(inputRelativeToRoot)
-) {
+if (isOutsideRepository(input)) {
   console.error(`Input harus berada di dalam repository: ${input}`);
   process.exit(1);
 }
@@ -45,10 +54,8 @@ try {
   process.exit(1);
 }
 
-const resolvedInputRelativeToRoot = relative(repositoryRoot, safeInput);
 if (
-  !resolvedInputRelativeToRoot ||
-  isOutsideRepository(resolvedInputRelativeToRoot) ||
+  isOutsideRepository(safeInput) ||
   !safeInput.toLowerCase().endsWith(".json")
 ) {
   console.error(`Input harus berupa file JSON di dalam repository: ${input}`);
