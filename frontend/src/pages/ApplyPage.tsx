@@ -1,17 +1,63 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import "leaflet/dist/leaflet.css";
 import {
   Check, Lock, MapPin, ArrowLeft, ChevronLeft, ChevronRight,
   FileText, User, Building, BookOpen, Upload, Download,
   CheckCircle, Info, AlertTriangle, Save, Clock, Trash2,
   Plus, Folder,
 } from "lucide-react";
+import L from "leaflet";
+import markerIconUrl from "leaflet/dist/images/marker-icon.png";
+import markerIconRetinaUrl from "leaflet/dist/images/marker-icon-2x.png";
+import markerShadowUrl from "leaflet/dist/images/marker-shadow.png";
+import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { View, AuthUser, ServiceType, UserProfile } from "../app/types";
-import { SERVICE_META, provinces, cities, districts, villages } from "../app/data";
+import { SERVICE_META, provinces, citiesForProvince, districtsForCity, villagesForDistrict } from "../app/data";
 import { PermitType, needsPermitType, PERMIT_FIELDS } from "../app/perizinan";
 import { PermitTypePicker, PermitInfo, usePermitTypes } from "../app/components/PermitTypePicker";
 import { Inp, Sel, Tex } from "../app/components/shared";
 import { api, ApiDraft, ApiError } from "../app/api";
 import { SIP_FORM_CONFIG, PermitField, PermitFieldUnit } from "../app/sipFormConfig";
+
+function CascadingLocationFields({ prefix, values, set, errors, tips }: {
+  prefix: string;
+  values: Record<string, string>;
+  set: (key: string, value: string) => void;
+  errors: Record<string, string>;
+  tips: (key: string) => string | undefined;
+}) {
+  const provinceKey = prefix ? prefix + "Province" : "province";
+  const cityKey = prefix ? prefix + "City" : "city";
+  const districtKey = prefix ? prefix + "District" : "district";
+  const villageKey = prefix ? prefix + "Village" : "village";
+  const province = values[provinceKey] ?? "";
+  const city = values[cityKey] ?? "";
+  const district = values[districtKey] ?? "";
+
+  const change = (key: string, value: string, children: string[]) => {
+    set(key, value);
+    children.forEach(child => set(child, ""));
+  };
+
+  return <>
+    <Sel label="Provinsi" options={provinces} required value={province}
+      onChange={value => change(provinceKey, value, [cityKey, districtKey, villageKey])}
+      error={errors[provinceKey]} tip={tips(provinceKey)} />
+    <Sel label="Kabupaten / Kota" options={citiesForProvince(province)} required value={city}
+      disabled={!province}
+      onChange={value => change(cityKey, value, [districtKey, villageKey])}
+      error={errors[cityKey]} tip={tips(cityKey)} />
+    <Sel label="Kecamatan" options={Object.keys(districtsForCity(province, city))} required value={district}
+      disabled={!city}
+      onChange={value => change(districtKey, value, [villageKey])}
+      error={errors[districtKey]} tip={tips(districtKey)} />
+    <Sel label="Kelurahan / Desa" options={villagesForDistrict(province, city, district)} required value={values[villageKey] ?? ""}
+      disabled={!district}
+      onChange={value => set(villageKey, value)}
+      error={errors[villageKey]} tip={tips(villageKey)} />
+  </>;
+}
+
 
 
 
@@ -61,60 +107,131 @@ function StepIndicator({ current, labels }: { current: number; labels?: string[]
   );
 }
 
-// ─── Map mock ────────────────────────────────────────────────────────────────
+// ─── OpenStreetMap location picker ───────────────────────────────────────────
 
-function MapView() {
+const permitLocationIcon = L.icon({
+  iconUrl: markerIconUrl,
+  iconRetinaUrl: markerIconRetinaUrl,
+  shadowUrl: markerShadowUrl,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+
+function MapViewport({ position }: { position: [number, number] }) {
+  const map = useMap();
+
+  useEffect(() => {
+    map.flyTo(position, map.getZoom(), { duration: 0.5 });
+  }, [map, position]);
+
+  return null;
+}
+
+function MapCoordinatePicker({ disabled, onChange }: { disabled: boolean; onChange: (latitude: number, longitude: number) => void }) {
+  useMapEvents({
+    click: event => {
+      if (!disabled) onChange(event.latlng.lat, event.latlng.lng);
+    },
+  });
+
+  return null;
+}
+
+function MapView({ latitude, longitude, onLatitudeChange, onLongitudeChange, onLockedChange, error }: {
+  latitude: string;
+  longitude: string;
+  onLatitudeChange: (value: string) => void;
+  onLongitudeChange: (value: string) => void;
+  onLockedChange: (locked: boolean) => void;
+  error?: string;
+}) {
   const [locked, setLocked] = useState(false);
+  const [mapError, setMapError] = useState("");
+  const parsedLatitude = Number(latitude);
+  const parsedLongitude = Number(longitude);
+  const hasCoordinates = latitude.trim() !== "" && longitude.trim() !== "";
+  const validCoordinates = hasCoordinates && Number.isFinite(parsedLatitude) && Number.isFinite(parsedLongitude)
+    && parsedLatitude >= -90 && parsedLatitude <= 90
+    && parsedLongitude >= -180 && parsedLongitude <= 180;
+  const mapPosition: [number, number] = validCoordinates ? [parsedLatitude, parsedLongitude] : [-6.914744, 107.609810];
+
+  const toggleCoordinates = () => {
+    if (locked) {
+      setLocked(false);
+      onLockedChange(false);
+      setMapError("");
+      return;
+    }
+    if (!validCoordinates) {
+      setLocked(false);
+      onLockedChange(false);
+      setMapError("Masukkan latitude (-90 sampai 90) dan longitude (-180 sampai 180) yang valid.");
+      return;
+    }
+    setMapError("");
+    setLocked(true);
+    onLockedChange(true);
+  };
+
+  const handleCoordinateChange = (setter: (value: string) => void, value: string) => {
+    setter(value);
+    setLocked(false);
+    onLockedChange(false);
+    setMapError("");
+  };
+
   return (
     <div className="space-y-3">
       <div className="relative h-64 rounded-xl overflow-hidden border border-border bg-slate-100">
-        <div className="absolute inset-0" style={{
-          backgroundImage: "linear-gradient(rgba(148,163,184,0.25) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.25) 1px, transparent 1px)",
-          backgroundSize: "36px 36px",
-        }} />
-        <div className="absolute bg-white/75 h-3" style={{ width: "130%", top: "42%", left: "-15%", transform: "rotate(-4deg)" }} />
-        <div className="absolute bg-white/75 w-3" style={{ height: "130%", left: "56%", top: "-15%", transform: "rotate(3deg)" }} />
-        <div className="absolute bg-white/55 h-2" style={{ width: "55%", top: "68%", left: "25%" }} />
-        <div className="absolute bg-white/55 w-2" style={{ height: "48%", left: "28%", top: "22%" }} />
-        <div className="absolute rounded-full bg-emerald-200/50" style={{ width: "72px", height: "56px", top: "16%", left: "12%" }} />
-        <div className="absolute rounded-full bg-emerald-200/40" style={{ width: "48px", height: "36px", bottom: "18%", right: "18%" }} />
-        {[{ x: "44%", y: "28%", w: "32px", h: "24px" }, { x: "62%", y: "52%", w: "22px", h: "20px" }, { x: "23%", y: "54%", w: "28px", h: "22px" }, { x: "70%", y: "22%", w: "18px", h: "16px" }].map((b, i) => (
-          <div key={i} className="absolute bg-slate-300/70 rounded-sm" style={{ left: b.x, top: b.y, width: b.w, height: b.h }} />
-        ))}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full">
-          <MapPin className={`h-9 w-9 drop-shadow-lg ${locked ? "text-emerald-600" : "text-accent"}`} fill="currentColor" fillOpacity={0.25} />
+      <MapContainer center={mapPosition} zoom={13} scrollWheelZoom className="h-full w-full z-0">
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        <MapViewport position={mapPosition} />
+        <MapCoordinatePicker
+          disabled={locked}
+          onChange={(newLatitude, newLongitude) => {
+            handleCoordinateChange(onLatitudeChange, newLatitude.toFixed(6));
+            handleCoordinateChange(onLongitudeChange, newLongitude.toFixed(6));
+          }}
+        />
+        {validCoordinates && <Marker position={mapPosition} icon={permitLocationIcon} />}
+      </MapContainer>
+      <div className="absolute top-3 left-3 z-[400] bg-white/90 backdrop-blur-sm rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm">Peta Lokasi Izin</div>
+      {locked && (
+        <div className="absolute bottom-3 left-3 z-[400] bg-emerald-500 text-white rounded-lg px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+          <Lock className="h-3 w-3" /> Koordinat Terkunci
         </div>
-        <div className="absolute top-3 right-3 flex flex-col gap-1">
-          {["+", "−"].map(c => (
-            <div key={c} className="w-7 h-7 bg-white rounded shadow-sm flex items-center justify-center cursor-pointer hover:bg-gray-50 text-sm font-bold text-gray-600 select-none">{c}</div>
-          ))}
-        </div>
-        <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm">Peta Lokasi Izin</div>
-        {locked && (
-          <div className="absolute bottom-3 left-3 bg-emerald-500 text-white rounded-lg px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
-            <Lock className="h-3 w-3" /> Koordinat Terkunci
-          </div>
-        )}
-      </div>
+      )}
+    </div>
       <div className="flex items-center gap-3">
         <div className="flex-1 grid grid-cols-2 gap-2">
-          {[{ label: "Latitude", val: "-6.914744" }, { label: "Longitude", val: "107.609810" }].map(({ label, val }) => (
-            <div key={label} className="bg-secondary/70 rounded-lg px-3 py-2">
-              <div className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold mb-0.5">{label}</div>
-              <div className="text-sm font-mono font-semibold text-foreground">{val}</div>
-            </div>
-          ))}
+          <label className="flex flex-col gap-1 text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">
+            Latitude
+            <input type="number" step="any" value={latitude} onChange={e => handleCoordinateChange(onLatitudeChange, e.target.value)} placeholder="-6.914744" aria-label="Latitude" disabled={locked}
+              className="h-10 px-3 rounded-lg border border-border bg-white text-sm font-mono text-foreground normal-case tracking-normal focus:outline-none focus:ring-2 focus:ring-accent/25 focus:border-accent disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-muted-foreground" />
+          </label>
+          <label className="flex flex-col gap-1 text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">
+            Longitude
+            <input type="number" step="any" value={longitude} onChange={e => handleCoordinateChange(onLongitudeChange, e.target.value)} placeholder="107.609810" aria-label="Longitude" disabled={locked}
+              className="h-10 px-3 rounded-lg border border-border bg-white text-sm font-mono text-foreground normal-case tracking-normal focus:outline-none focus:ring-2 focus:ring-accent/25 focus:border-accent disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-muted-foreground" />
+          </label>
         </div>
         <button
-          onClick={() => setLocked(!locked)}
+          type="button"
+          onClick={toggleCoordinates}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex-shrink-0 ${
             locked ? "bg-emerald-500 text-white hover:bg-emerald-600 shadow-md shadow-emerald-200" : "bg-accent text-white hover:bg-blue-700 shadow-md shadow-accent/20"
           }`}
         >
           <Lock className="h-4 w-4" />
-          {locked ? "Terkunci" : "Kunci Koordinat"}
+          {locked ? "Buka Koordinat" : "Kunci Koordinat"}
         </button>
       </div>
+      {(mapError || error) && <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle className="h-3 w-3 flex-shrink-0" />{mapError || error}</p>}
     </div>
   );
 }
@@ -512,6 +629,7 @@ const FIELD_TIPS: Record<string, string> = {
   village:           "Pilih kelurahan atau desa sesuai alamat di KTP Anda.",
   address:           "Tuliskan alamat lengkap: nama jalan, nomor rumah, RT/RW, dan kelurahan.",
   notes:             "Tambahkan catatan atau keterangan lain yang relevan dengan permohonan Anda.",
+  permitProvince:    "Pilih provinsi tempat usaha Anda berada.",
   permitCity:        "Kota/kabupaten tempat usaha Anda berada. Boleh berbeda dari domisili KTP.",
   permitDistrict:    "Kecamatan lokasi usaha atau kegiatan yang dimohonkan izinnya.",
   permitVillage:     "Kelurahan atau desa lokasi usaha yang dimohonkan izinnya.",
@@ -557,8 +675,11 @@ const DEFAULT_FORM: Record<string, string> = {
   address:          "",
   notes:            "",
   // Step 2 — Lokasi Izin
+  permitProvince:   "",
   permitCity:       "",
   permitDistrict:   "",
+  permitLatitude:   "-6.914744",
+  permitLongitude:  "107.609810",
   permitVillage:    "",
   permitAddress:    "",
   // Step 3 — Data Perusahaan
@@ -602,6 +723,7 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
   const [submitted, setSubmitted] = useState(false);
   const [f, setF] = useState<Record<string, string>>({});
   const [err, setErr] = useState<Record<string, string>>({});
+  const [coordinatesLocked, setCoordinatesLocked] = useState(false);
   const [step5Valid, setStep5Valid] = useState(false);
   const [step5Touched, setStep5Touched] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<(File | null)[]>([]);
@@ -739,6 +861,7 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
     setServiceType(svcType);
     setStep(1);
     setF(initialForm);
+    setCoordinatesLocked(false);
     setSkipCompany(false);
     setErr({});
   };
@@ -750,6 +873,7 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
     setStep(d.step);
     setSkipCompany(d.skipCompany);
     setF({ ...DEFAULT_FORM, ...d.formData });
+    setCoordinatesLocked(false);
     setErr({});
   };
 
@@ -798,10 +922,13 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
       { key: "address", label: "Alamat Lengkap" },
     ];
     if (s === 2) return [
+      { key: "permitProvince", label: "Provinsi" },
       { key: "permitCity", label: "Kabupaten / Kota" },
       { key: "permitDistrict", label: "Kecamatan" },
       { key: "permitVillage", label: "Kelurahan / Desa" },
       { key: "permitAddress", label: "Alamat / Lokasi Izin" },
+      { key: "permitLatitude", label: "Latitude", rule: v => Number.isFinite(Number(v)) && Number(v) >= -90 && Number(v) <= 90 ? null : "Latitude harus berada di antara -90 dan 90" },
+      { key: "permitLongitude", label: "Longitude", rule: v => Number.isFinite(Number(v)) && Number(v) >= -180 && Number(v) <= 180 ? null : "Longitude harus berada di antara -180 dan 180" },
     ];
     if (s === 3 && !skipCompany) return [
       { key: "companyName", label: "Nama Perusahaan" },
@@ -848,7 +975,20 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
       const error = validateFormat(values[key] ?? "", format);
       if (error) newErr[key] = error;
     });
-    const choices: Record<string, string[]> = { province: provinces, city: cities, district: districts, village: villages, permitCity: cities, permitDistrict: districts, permitVillage: villages, companyProvince: provinces, companyCity: cities, companyDistrict: districts, companyVillage: villages };
+    const choices: Record<string, string[]> = {
+      province: provinces,
+      city: citiesForProvince(values.province ?? ""),
+      district: Object.keys(districtsForCity(values.province ?? "", values.city ?? "")),
+      village: villagesForDistrict(values.province ?? "", values.city ?? "", values.district ?? ""),
+      permitProvince: provinces,
+      permitCity: citiesForProvince(values.permitProvince ?? ""),
+      permitDistrict: Object.keys(districtsForCity(values.permitProvince ?? "", values.permitCity ?? "")),
+      permitVillage: villagesForDistrict(values.permitProvince ?? "", values.permitCity ?? "", values.permitDistrict ?? ""),
+      companyProvince: provinces,
+      companyCity: citiesForProvince(values.companyProvince ?? ""),
+      companyDistrict: Object.keys(districtsForCity(values.companyProvince ?? "", values.companyCity ?? "")),
+      companyVillage: villagesForDistrict(values.companyProvince ?? "", values.companyCity ?? "", values.companyDistrict ?? ""),
+    };
     fields.forEach(({ key, label }) => {
       if (values[key]?.trim() && choices[key] && !choices[key].includes(values[key])) newErr[key] = `Pilih ${label} dari pilihan yang tersedia`;
     });
@@ -887,6 +1027,11 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
       }
     }
     if (dir === 1 && !validate(step)) { window.scrollTo({ top: 200, behavior: "smooth" }); return; }
+    if (dir === 1 && step === 2 && !coordinatesLocked) {
+      setErr(current => ({ ...current, permitLatitude: "Kunci koordinat terlebih dahulu sebelum melanjutkan." }));
+      window.scrollTo({ top: 200, behavior: "smooth" });
+      return;
+    }
     const next = step + dir;
     if (next > lastStep) {
       if (!serviceType || (serviceType === "sip" && (!step5Valid || uploadedFiles.length !== step5Labels.length || !step5Labels.every((_, index) => uploadedFiles[index] != null))) || submitting) return;
@@ -1263,10 +1408,7 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
                 <Inp label="Nama Lengkap Pemohon" placeholder="Nama sesuai KTP" required value={f.name} onChange={v => set("name", v)} error={err.name} tip={t("name")} />
               </div>
               <Inp label="No. HP / WhatsApp Aktif" placeholder="+62 8xx-xxxx-xxxx" type="tel" required value={f.phone} onChange={v => set("phone", v)} error={err.phone} tip={t("phone")} />
-              <Sel label="Provinsi" options={provinces} required value={f.province} onChange={v => set("province", v)} error={err.province} tip={t("province")} />
-              <Sel label="Kabupaten / Kota" options={cities} required value={f.city} onChange={v => set("city", v)} error={err.city} tip={t("city")} />
-              <Sel label="Kecamatan" options={districts} required value={f.district} onChange={v => set("district", v)} error={err.district} tip={t("district")} />
-              <Sel label="Kelurahan / Desa" options={villages} required value={f.village} onChange={v => set("village", v)} error={err.village} tip={t("village")} />
+              <CascadingLocationFields prefix="" values={f} set={set} errors={err} tips={t} />
               <div className="sm:col-span-2">
                 <Tex label="Alamat Lengkap Pemohon" placeholder="Jalan, nomor rumah, RT/RW, kelurahan, kecamatan..." required value={f.address} onChange={v => set("address", v)} error={err.address} tip={t("address")} />
               </div>
@@ -1288,16 +1430,21 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-              <Sel label="Kabupaten / Kota" options={cities} required value={f.permitCity} onChange={v => set("permitCity", v)} error={err.permitCity} tip={t("permitCity")} />
-              <Sel label="Kecamatan" options={districts} required value={f.permitDistrict} onChange={v => set("permitDistrict", v)} error={err.permitDistrict} tip={t("permitDistrict")} />
-              <Sel label="Kelurahan / Desa" options={villages} required value={f.permitVillage} onChange={v => set("permitVillage", v)} error={err.permitVillage} tip={t("permitVillage")} />
+              <CascadingLocationFields prefix="permit" values={f} set={set} errors={err} tips={t} />
               <div className="sm:col-span-2">
                 <Inp label="Alamat / Lokasi Izin" placeholder="Alamat lengkap lokasi usaha" required value={f.permitAddress} onChange={v => set("permitAddress", v)} error={err.permitAddress} tip={t("permitAddress")} />
               </div>
             </div>
             <div>
               <label className="text-sm font-medium text-foreground block mb-2">Koordinat Lokasi <span className="text-red-500">*</span></label>
-              <MapView />
+              <MapView
+                latitude={f.permitLatitude}
+                longitude={f.permitLongitude}
+                onLatitudeChange={v => set("permitLatitude", v)}
+                onLongitudeChange={v => set("permitLongitude", v)}
+                onLockedChange={setCoordinatesLocked}
+                error={err.permitLatitude || err.permitLongitude}
+              />
             </div>
           </div>
         )}
@@ -1336,10 +1483,7 @@ export function ApplyPage({ setView, auth, profile }: { setView: (v: View) => vo
                 <div className="sm:col-span-2">
                   <Sel label="Bidang Usaha" options={["Jasa Pendidikan & Kursus", "Perdagangan Retail", "Industri Makanan & Minuman", "Jasa Kecantikan", "Fasilitas Kesehatan", "Industri Manufaktur", "Jasa Pariwisata"]} required value={f.businessType} onChange={v => set("businessType", v)} error={err.businessType} tip={t("businessType")} />
                 </div>
-                <Sel label="Provinsi" options={provinces} required value={f.companyProvince} onChange={v => set("companyProvince", v)} error={err.companyProvince} tip={t("companyProvince")} />
-                <Sel label="Kabupaten / Kota" options={cities} required value={f.companyCity} onChange={v => set("companyCity", v)} error={err.companyCity} tip={t("companyCity")} />
-                <Sel label="Kecamatan" options={districts} required value={f.companyDistrict} onChange={v => set("companyDistrict", v)} error={err.companyDistrict} tip={t("companyDistrict")} />
-                <Sel label="Kelurahan / Desa" options={villages} required value={f.companyVillage} onChange={v => set("companyVillage", v)} error={err.companyVillage} tip={t("companyVillage")} />
+                <CascadingLocationFields prefix="company" values={f} set={set} errors={err} tips={t} />
                 <div className="sm:col-span-2">
                   <Tex label="Alamat Lengkap Perusahaan" placeholder="Alamat lengkap kantor / tempat usaha..." required value={f.companyAddress} onChange={v => set("companyAddress", v)} error={err.companyAddress} tip={t("companyAddress")} />
                 </div>

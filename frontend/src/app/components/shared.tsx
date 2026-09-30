@@ -55,10 +55,10 @@ export function Inp({ label, placeholder, type = "text", required = false, value
 export interface SelProps {
   label: string; options: string[];
   required?: boolean; value?: string; onChange?: (v: string) => void; error?: string;
-  tip?: string;
+  tip?: string; disabled?: boolean;
 }
 
-export function Sel({ label, options, required = false, value = "", onChange, error, tip }: SelProps) {
+export function Sel({ label, options, required = false, value = "", onChange, error, tip, disabled = false }: SelProps) {
   const cls = error
     ? "border-red-400 bg-red-50/30 focus:ring-red-200 focus:border-red-400"
     : "border-border bg-white focus:ring-accent/25 focus:border-accent";
@@ -69,8 +69,8 @@ export function Sel({ label, options, required = false, value = "", onChange, er
         {tip && <TipBubble text={tip} />}
       </label>
       <div className="relative">
-        <select value={value} onChange={e => onChange?.(e.target.value)}
-          className={`w-full h-10 px-3 pr-9 rounded-lg border text-sm text-foreground focus:outline-none focus:ring-2 transition-all appearance-none ${cls}`}>
+        <select value={value} disabled={disabled} onChange={e => onChange?.(e.target.value)}
+          className={`w-full h-10 px-3 pr-9 rounded-lg border text-sm text-foreground focus:outline-none focus:ring-2 transition-all appearance-none disabled:bg-slate-100 disabled:text-muted-foreground disabled:cursor-not-allowed ${cls}`}>
           <option value="">-- Pilih {label} --</option>
           {options.map(o => <option key={o}>{o}</option>)}
         </select>

@@ -1,5 +1,6 @@
 import { AuthUser, ServiceType } from "./types";
 import { Activity, Briefcase, Building } from "lucide-react";
+import locations from "./locations.json";
 
 export const DEMO_ACCOUNTS: (AuthUser & { password: string })[] = [
   { email: "user@dsj.go.id",  password: "demo123",  name: "Rival Adrian",  role: "user"  },
@@ -10,10 +11,30 @@ export function getInitials(name: string) {
   return name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
 }
 
-export const provinces = ["DKI Jakarta","Jawa Barat","Jawa Tengah","Jawa Timur","Banten","DI Yogyakarta","Bali","Sumatera Utara","Sulawesi Selatan","Kalimantan Timur"];
-export const cities    = ["Bandung","Surabaya","Bekasi","Tangerang","Depok","Semarang","Makassar","Medan","Palembang","Malang"];
-export const districts = ["Coblong","Cicendo","Cibeunying Kidul","Sukajadi","Bandung Wetan","Sumur Bandung","Antapani","Arcamanik","Cidadap","Cinambo"];
-export const villages  = ["Dago","Lebak Siliwangi","Cipaganti","Sekeloa","Lebakgede","Cigadung","Sadang Serang","Neglasari","Sukaluyu","Sukaraja"];
+export interface LocationCity {
+  name: string;
+  districts: Record<string, string[]>;
+}
+
+/** Dataset wilayah lokal. Sumber: https://github.com/ibnux/data-indonesia */
+export const locationData: Record<string, LocationCity[]> = locations as unknown as Record<string, LocationCity[]>;
+
+export const provinces = Object.keys(locationData);
+export const cities = [...new Set(Object.values(locationData).flat().map(city => city.name))];
+export const districts = [...new Set(Object.values(locationData).flat().flatMap(city => Object.keys(city.districts)))];
+export const villages = [...new Set(Object.values(locationData).flat().flatMap(city => Object.values(city.districts).flat()))];
+
+export function citiesForProvince(province: string) {
+  return locationData[province]?.map(city => city.name) ?? [];
+}
+
+export function districtsForCity(province: string, city: string) {
+  return locationData[province]?.find(item => item.name === city)?.districts ?? {};
+}
+
+export function villagesForDistrict(province: string, city: string, district: string) {
+  return districtsForCity(province, city)[district] ?? [];
+}
 
 export const MOCK_APPLICATIONS = [
   {
